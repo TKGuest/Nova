@@ -112,7 +112,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
   }, [user, pageId]);
 
-  if (!isMounted) return <div className="flex items-center justify-center min-h-[400px] text-gray-500">Loading workspace...</div>;
+  if (!isMounted) return <div className="flex items-center justify-center min-h-[400px] text-gray-500">Connecting to Nova Workspace...</div>;
 
   const addMasterTask = async (type: PropertyType = 'habit') => {
     if (!user) return;
