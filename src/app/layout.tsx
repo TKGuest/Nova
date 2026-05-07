@@ -16,6 +16,8 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Workspace',
   description: 'Notion cloned workspace with offline support and syncing',
+};
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
