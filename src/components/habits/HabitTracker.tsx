@@ -247,7 +247,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         </div>
         )}
 
-        <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="flex-1 overflow-auto custom-scrollbar overscroll-contain">
           {isPeek && sidePeekRecordId ? (
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
               {records.filter(r => r.id === sidePeekRecordId).map(record => {
