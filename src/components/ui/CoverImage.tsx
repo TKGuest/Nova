@@ -311,7 +311,7 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
       )}
 
       {isOpen && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] w-[90%] max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
           <div className="flex items-center justify-between p-4 border-b border-white/5">
              <div className="flex gap-4">
                <button onClick={() => setActiveTab('presets')} className={`text-[12px] font-black uppercase tracking-widest transition-all ${activeTab === 'presets' ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>Gallery</button>
@@ -321,7 +321,7 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
             <button onClick={() => setIsOpen(false)} className="p-1 text-gray-500 hover:text-white transition-colors"><X size={16}/></button>
           </div>
 
-          <div className="p-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+          <div className="p-4 flex-1 overflow-y-auto custom-scrollbar overscroll-contain">
             {activeTab === 'presets' && (
               <div className="space-y-6">
                 <div className="space-y-2">
