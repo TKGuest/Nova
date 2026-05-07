@@ -6,7 +6,7 @@ import { Maximize2, X, FileText, CalendarCheck2 } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { PageModel } from '@/components/layout/Sidebar';
+import { PageModel } from '@/types';
 import { WordEditor } from '@/components/editor/WordEditor';
 import { HabitTracker } from '@/components/habits/HabitTracker';
 

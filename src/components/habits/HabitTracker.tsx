@@ -8,7 +8,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modals';
-import { PageModel } from '@/components/layout/Sidebar';
+import { PageModel } from '@/types';
 import { format, isSameDay, startOfDay, eachDayOfInterval, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, parseISO, addDays, isAfter, isSameWeek, getYear, getMonth, addMonths, subMonths, setYear, setMonth, isSameMonth } from 'date-fns';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
