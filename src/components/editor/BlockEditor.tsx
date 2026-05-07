@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, doc, onSnapshot, query, orderBy, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Block, BlockType } from '@/types';
+import { Block, BlockType } from '../../types';
 import { BlockNode } from './BlockNode';
 import { EditorToolbar } from './EditorToolbar';
 import { LexoRank } from 'lexorank';
