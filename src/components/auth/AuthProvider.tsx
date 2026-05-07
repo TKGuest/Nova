@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {loading ? (
         <div className="min-h-screen bg-background flex flex-col justify-center items-center text-foreground">
           <Loader2 className="animate-spin mb-4" size={32} />
-          <p>Loading Workspace...</p>
+          <p>Authenticating with Nova...</p>
         </div>
       ) : user ? (
         children
