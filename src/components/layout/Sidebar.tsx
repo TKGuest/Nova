@@ -11,7 +11,7 @@ import { UserProfile } from '@/components/auth/UserProfile';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useNotification } from '@/context/NotificationContext';
 
-import { PageModel } from '@/types';
+import { PageModel } from '../../types';
 
 export function Sidebar() {
   const { user } = useAuth();
