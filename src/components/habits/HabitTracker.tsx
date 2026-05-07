@@ -201,7 +201,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div className={`w-full flex-1 flex flex-col min-h-0 bg-[#0a0a0a] ${isPeek ? 'py-4 px-6' : 'py-4 px-10'}`}>
+      <div className={`w-full flex-1 flex flex-col min-h-0 bg-[#0a0a0a] ${isPeek ? 'py-4 px-6' : 'py-4 px-4 md:px-10'}`}>
         {/* Header - Hidden in focused peek mode to save space */}
         {!(isPeek && sidePeekRecordId) && (
           <div className={`flex items-center justify-between mb-6 pb-4 border-b border-[#1a1a1a] ${isPeek ? 'flex-wrap gap-4' : ''}`}>
@@ -247,7 +247,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         </div>
         )}
 
-        <div className="flex-1 overflow-auto custom-scrollbar overscroll-contain">
+        <div className="flex-1 overflow-auto custom-scrollbar overscroll-contain touch-pan-y">
           {isPeek && sidePeekRecordId ? (
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
               {records.filter(r => r.id === sidePeekRecordId).map(record => {

@@ -41,7 +41,7 @@ export default function RootLayout({
                 main={
                   <>
                     <Header />
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
+                    <div className="flex-1 flex flex-col min-h-0">
                       {children}
                     </div>
                     <SidePeek />
