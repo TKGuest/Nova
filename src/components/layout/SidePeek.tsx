@@ -18,15 +18,30 @@ export function SidePeek() {
   const [size, setSize] = useState({ width: 700, height: 800 });
   const [pageData, setPageData] = useState<PageModel | null>(null);
   
+  const [isMobile, setIsMobile] = useState(false);
+  
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    setPosition({
-      x: Math.max(50, window.innerWidth / 2 - 350),
-      y: Math.max(50, window.innerHeight / 2 - 400)
-    });
-  }, [sidePeekPageId]);
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setPosition({ x: 0, y: 0 });
+      setSize({ width: window.innerWidth, height: window.innerHeight });
+    } else {
+      setPosition({
+        x: Math.max(50, window.innerWidth / 2 - 350),
+        y: Math.max(50, window.innerHeight / 2 - 400)
+      });
+      setSize({ width: 700, height: 800 });
+    }
+  }, [sidePeekPageId, isMobile]);
 
   useEffect(() => {
     if (!sidePeekPageId || !user) return;
@@ -44,6 +59,7 @@ export function SidePeek() {
   if (!sidePeekPageId || !user) return null;
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isMobile) return;
     isDragging.current = true;
     dragOffset.current = {
       x: e.clientX - position.x,
@@ -53,7 +69,7 @@ export function SidePeek() {
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging.current) return;
+    if (!isDragging.current || isMobile) return;
     setPosition({
       x: e.clientX - dragOffset.current.x,
       y: e.clientY - dragOffset.current.y
@@ -71,12 +87,12 @@ export function SidePeek() {
         position: 'fixed',
         left: position.x,
         top: position.y,
-        width: size.width,
-        height: size.height,
-        minWidth: '400px',
-        minHeight: '400px'
+        width: isMobile ? '100vw' : size.width,
+        height: isMobile ? '100vh' : size.height,
+        minWidth: isMobile ? '100vw' : '400px',
+        minHeight: isMobile ? '100vh' : '400px'
       }}
-      className="z-[100] bg-background border border-border shadow-2xl rounded-xl flex flex-col overflow-hidden resize bg-clip-padding"
+      className={`z-[100] bg-background border border-border shadow-2xl flex flex-col overflow-hidden resize bg-clip-padding ${isMobile ? 'rounded-none' : 'rounded-xl'}`}
       onMouseDown={(e) => e.stopPropagation()} 
     >
       {/* Draggable Header */}
