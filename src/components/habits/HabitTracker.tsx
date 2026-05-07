@@ -358,9 +358,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                           <div 
                             key={record.id} 
                             onClick={() => { if (!isPeek) { setSidePeekPageId(pageId); setSidePeekRecordId(record.id); } }}
-                            className={`bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] flex flex-col hover:border-[#3d3d3d] transition-all group/card relative overflow-hidden h-fit min-h-[160px] shadow-sm ${!isPeek ? 'cursor-pointer' : ''}`}
+                            className={`bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] flex flex-col hover:border-[#3d3d3d] transition-all group/card relative overflow-hidden h-fit ${!isPeek ? 'min-h-0 md:min-h-[160px]' : 'min-h-[160px]'} shadow-sm ${!isPeek ? 'cursor-pointer' : ''}`}
                           >
-                            <div className="h-24 w-full relative overflow-hidden shrink-0 border-b border-[#1a1a1a] bg-[#161616]">
+                            <div className={`h-24 w-full relative overflow-hidden shrink-0 border-b border-[#1a1a1a] bg-[#161616] ${!isPeek ? 'hidden md:block' : ''}`}>
                               {record.coverImage && (
                                 <img 
                                   src={record.coverImage.url + (record.coverImage.type === 'preset' ? (record.coverImage.url.includes('?') ? '&w=600' : '?w=600') : '')} 
@@ -398,7 +398,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                   </div>
                                 ))}
                                 {masterTasks.filter(t => t.type === 'notes').map(t => (
-                                  <div key={t.id} onClick={(e) => e.stopPropagation()} className="px-1.5 py-1.5 bg-[#161616] rounded border border-[#1a1a1a] space-y-1">
+                                  <div key={t.id} onClick={(e) => e.stopPropagation()} className={`px-1.5 py-1.5 bg-[#161616] rounded border border-[#1a1a1a] space-y-1 ${!isPeek ? 'hidden md:block' : ''}`}>
                                     <span className="text-[7px] font-black uppercase text-gray-600 tracking-widest block">{t.name}</span>
                                     <textarea 
                                       className={`w-full bg-transparent text-gray-400 placeholder:text-gray-800 outline-none resize-none p-0 border-none leading-tight ${textSize === 'large' ? 'text-[9px]' : 'text-[8px]'}`} 
