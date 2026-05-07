@@ -8,7 +8,7 @@ export function MobileLayoutWrapper({ sidebar, main }: { sidebar: React.ReactNod
   const isHome = pathname === '/';
 
   return (
-    <div className="flex h-screen overflow-hidden w-full">
+    <div className="flex h-[100dvh] overflow-hidden w-full">
       <div className={`shrink-0 h-full ${isHome ? 'w-full block' : 'hidden md:block w-64'}`}>
         {sidebar}
       </div>
