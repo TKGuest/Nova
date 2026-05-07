@@ -54,18 +54,22 @@ export default function DynamicPage() {
   }
 
   return (
-    <main className="h-full min-h-screen">
-      <CoverImage pageId={pageId} coverImage={pageMeta.coverImage} />
-      <div className="w-full py-12 px-8">
-        <h1 className="text-4xl font-bold text-foreground mb-8 outline-none" contentEditable suppressContentEditableWarning>
-          {pageMeta.title}
-        </h1>
-        {pageMeta.type === 'note' ? (
-          <WordEditor pageId={pageId} />
-        ) : (
-          <HabitTracker pageId={pageId} />
-        )}
+    <div className="flex flex-col h-full overflow-hidden bg-[#1e1e1e]">
+      <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y">
+        <CoverImage pageId={pageId} coverImage={pageMeta.coverImage} />
+        <div className="max-w-5xl mx-auto px-6 md:px-20 py-10">
+          <h1 className="text-4xl font-bold text-foreground mb-8 outline-none" contentEditable suppressContentEditableWarning>
+            {pageMeta.title}
+          </h1>
+          <div className="min-h-0">
+            {pageMeta.type === 'note' ? (
+              <WordEditor pageId={pageId} />
+            ) : (
+              <HabitTracker pageId={pageId} />
+            )}
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
