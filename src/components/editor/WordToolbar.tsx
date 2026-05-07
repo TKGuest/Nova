@@ -75,12 +75,12 @@ export function WordToolbar({ editor }: { editor: Editor }) {
         
         <ToolbarButton 
           icon={<Subscript size={16}/>} 
-          onClick={() => editor.chain().focus().toggleSubscript?.().run()} 
+          onClick={() => (editor.chain().focus() as any).toggleSubscript?.().run()} 
           active={editor.isActive('subscript')} 
         />
         <ToolbarButton 
           icon={<Superscript size={16}/>} 
-          onClick={() => editor.chain().focus().toggleSuperscript?.().run()} 
+          onClick={() => (editor.chain().focus() as any).toggleSuperscript?.().run()} 
           active={editor.isActive('superscript')} 
         />
         
@@ -140,9 +140,10 @@ export function WordToolbar({ editor }: { editor: Editor }) {
   );
 }
 
-function ToolbarButton({ icon, onClick, active }: { icon: React.ReactNode, onClick?: () => void, active?: boolean }) {
+function ToolbarButton({ icon, onClick, active, title }: { icon: React.ReactNode, onClick?: () => void, active?: boolean, title?: string }) {
   return (
     <button 
+      title={title}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={`p-1.5 rounded transition-colors ${active ? 'bg-[#37373d] text-white' : 'text-gray-400 hover:bg-[#37373d] hover:text-gray-200'}`}

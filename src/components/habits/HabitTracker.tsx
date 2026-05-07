@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs } from 'firebase/firestore';
-import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings } from 'lucide-react';
+import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -467,7 +467,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       </div>
 
       <ConfirmDialog isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} onConfirm={() => confirmDelete && deleteRecord(confirmDelete.id)} title="Delete Date Record" message={`Are you sure you want to delete this day? This will permanently remove all logs for ${confirmDelete?.label}.`} />
-      <DatePickerModal isOpen={!!isDatePickerOpen} onClose={() => setIsDatePickerOpen(null)} initialDate={isDatePickerOpen?.initialDate} onSelect={async (date) => { 
+      <DatePickerModal isOpen={!!isDatePickerOpen} onClose={() => setIsDatePickerOpen(null)} initialDate={isDatePickerOpen?.initialDate} onSelect={async (date: Date) => { 
         if (!user) return; 
         const dateStr = format(date, 'yyyy-MM-dd'); 
         const data: any = { 

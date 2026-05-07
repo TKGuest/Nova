@@ -6,7 +6,6 @@ import { collection, doc, onSnapshot, query, orderBy, setDoc, updateDoc, deleteD
 import { Block, BlockType } from '@/types';
 import { BlockNode } from './BlockNode';
 import { EditorToolbar } from './EditorToolbar';
-import { BubbleMenu } from './BubbleMenu';
 import { LexoRank } from 'lexorank';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -200,7 +199,6 @@ export function BlockEditor({ pageId }: BlockEditorProps) {
   return (
     <div className="w-full relative pb-32">
       <EditorToolbar />
-      <BubbleMenu />
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
           <div className="flex flex-col gap-0">
