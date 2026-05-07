@@ -177,25 +177,25 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   const getTextClasses = () => {
     switch (textSize) {
-      case 'medium': return 'text-[12px]';
-      case 'large': return 'text-[14px]';
-      default: return 'text-[10px]';
+      case 'medium': return 'text-[15px] md:text-[16px]';
+      case 'large': return 'text-[18px] md:text-[20px]';
+      default: return 'text-[12px] md:text-[14px]';
     }
   };
 
   const getLabelClasses = () => {
     switch (textSize) {
-      case 'medium': return 'text-[9.5px]';
-      case 'large': return 'text-[11px]';
-      default: return 'text-[8.5px]';
+      case 'medium': return 'text-[11px] md:text-[12px]';
+      case 'large': return 'text-[13px] md:text-[14px]';
+      default: return 'text-[9.5px] md:text-[11px]';
     }
   };
 
   const getCheckboxScale = () => {
     switch (textSize) {
-      case 'medium': return 'scale-[0.85]';
-      case 'large': return 'scale-[1.0]';
-      default: return 'scale-[0.75]';
+      case 'medium': return 'scale-[1.0] md:scale-[1.1]';
+      case 'large': return 'scale-[1.15] md:scale-[1.25]';
+      default: return 'scale-[0.85] md:scale-[1.0]';
     }
   };
 
