@@ -9,6 +9,7 @@ import { SettingsModal } from '@/components/settings/SettingsModal';
 import { CalendarProvider } from '@/context/CalendarContext';
 import { Header } from '@/components/layout/Header';
 import { NotificationProvider } from '@/context/NotificationContext';
+import { MobileLayoutWrapper } from '@/components/layout/MobileLayoutWrapper';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -29,17 +30,19 @@ export default function RootLayout({
           <NotificationProvider>
             <WorkspaceProvider>
             <CalendarProvider>
-              <div className="flex h-screen overflow-hidden">
-                <Sidebar />
-                <main className="flex-1 bg-[#1e1e1e] flex flex-col overflow-hidden">
-                  <Header />
-                  <div className="flex-1 overflow-y-auto">
-                    {children}
-                  </div>
-                  <SidePeek />
-                  <SettingsModal />
-                </main>
-              </div>
+              <MobileLayoutWrapper 
+                sidebar={<Sidebar />}
+                main={
+                  <>
+                    <Header />
+                    <div className="flex-1 overflow-y-auto">
+                      {children}
+                    </div>
+                    <SidePeek />
+                    <SettingsModal />
+                  </>
+                }
+              />
             </CalendarProvider>
           </WorkspaceProvider>
         </NotificationProvider>
