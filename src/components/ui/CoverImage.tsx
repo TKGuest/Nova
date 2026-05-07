@@ -37,6 +37,9 @@ interface CoverImageProps {
 }
 
 export function CoverImage({ pageId, recordId, isDefault, coverImage, editable = true }: CoverImageProps) {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
   const { user } = useAuth();
   const { showToast } = useNotification();
   const [isOpen, setIsOpen] = useState(false);
@@ -222,16 +225,17 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
     }
   };
 
+  if (!isMounted) return <div className="w-full h-48 md:h-64 bg-[#111]" />;
+
   return (
     <div 
       ref={imageContainerRef}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
       className={`relative group/cover w-full h-48 md:h-64 bg-[#111] overflow-hidden ${isRepositioning ? 'cursor-ns-resize select-none' : ''}`}
+      onPointerDown={isRepositioning ? handlePointerDown : undefined}
+      onPointerMove={isRepositioning ? handlePointerMove : undefined}
+      onPointerUp={isRepositioning ? handlePointerUp : undefined}
     >
-      {(coverImage || optimisticCover) ? (
+      {(coverImage?.url || optimisticCover) ? (
         <>
           <img 
             src={optimisticCover ? optimisticCover : getOptimizedUrl(coverImage?.url, coverImage?.type, 2000)} 

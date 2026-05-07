@@ -56,6 +56,11 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, taskId: string } | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, label: string } | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -257,9 +262,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 const totalCount = habits.length;
                 const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
+                if (!isMounted) return <div className="w-full h-48 md:h-64 bg-[#111]" />;
+
                 return (
                   <div key={record.id} className="flex-1 flex flex-col space-y-6">
                     <CoverImage 
+                      key={`${record.id}-${record.coverImage?.url || 'no-cover'}`}
                       pageId={pageId} 
                       recordId={record.id} 
                       coverImage={record.coverImage} 
