@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Werewolf Moderator</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --bg-surface: #1e1e1e;
+      --bg-light: #2c2c2c;
+      --text: #ffffff;
+      --text-muted: #aaaaaa;
+      --primary: #bb86fc;
+      --danger: #cf6679;
+      --success: #03dac6;
+      /* Team colors */
+      --village: #39d353; /* green */
+      --wolf: #ff4444;
+      --neutral: #a855f7; /* purple */
+      --cupid: #ff69b4;
+      --tanner: #8b4513;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, select, textarea {
+      user-select: auto;
+      -webkit-user-select: auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 15px;
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid #333;
+      padding-top: env(safe-area-inset-top, 20px);
+    }
+    .strength { font-weight: bold; }
+    .strength.positive { color: var(--success); }
+    .strength.negative { color: var(--danger); }
+    .settings-btn { background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; }
+    
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      padding-bottom: 80px;
+    }
+    
+    .tab-content { display: none; flex-direction: column; gap: 15px;}
+    .tab-content.active { display: flex; }
+    
+    nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      display: flex;
+      background-color: var(--bg-surface);
+      border-top: 1px solid #333;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      z-index: 10;
+    }
+    .nav-item {
+      flex: 1; text-align: center; padding: 15px 0; color: var(--text-muted); cursor: pointer; font-size: 14px;
+    }
+    .nav-item.active { color: var(--primary); font-weight: bold; }
+    
+    button {
+      background-color: var(--primary); color: #000; border: none; padding: 10px 15px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer;
+    }
+    button.outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+    button.danger { background-color: var(--danger); color: white; }
+    button.small { padding: 5px 10px; font-size: 14px; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    input, select, textarea {
+      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #444; background-color: var(--bg); color: var(--text); font-size: 16px;
+    }
+    
+    .card { background-color: var(--bg-surface); padding: 15px; border-radius: 8px; border: 1px solid #333; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    .flex-gap { display: flex; gap: 10px; }
+    
+    /* Setup Grid */
+    .setup-list { max-height: 250px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; padding: 5px; background: var(--bg);}
+    .setup-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #333; }
+    .setup-item:last-child { border-bottom: none; }
+    .counter-controls { display: flex; align-items: center; gap: 10px; }
+    .counter-btn { width: 30px; height: 30px; border-radius: 50%; font-size: 18px; padding: 0; display: flex; justify-content: center; align-items: center; }
+    
+    /* Grid */
+    .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+    .grid-btn {
+      aspect-ratio: 1; display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+      background-color: var(--bg-surface); border: 1px solid #444; border-radius: 8px; color: var(--text); font-size: 14px; padding: 5px; text-align: center; position: relative;
+    }
+    .grid-btn.selected { border-color: var(--primary); background-color: rgba(187,134,252,0.2); }
+    .grid-btn.dead { opacity: 0.4; background-color: #330000; border-color: #660000; }
+    .grid-btn .role-tag { font-size: 10px; opacity: 0.8; }
+    
+    /* Ensure grid buttons are always block-level for visibility */
+    .player-grid .grid-btn { display: flex !important; }
+    
+    .toggle-dead-btn { position: absolute; top: 2px; right: 2px; background: none; border: none; font-size: 16px; cursor: pointer; }
+    
+    .mapping-banner { background: var(--primary); color: black; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 10px; }
+    .action-instruction { background: rgba(187, 134, 252, 0.2); color: var(--primary); padding: 8px; border-radius: 4px; border: 1px solid var(--primary); margin-bottom: 10px; font-size: 14px; display: none; }
+    
+    .history-log { display: flex; flex-direction: column; gap: 8px; font-family: monospace; font-size: 13px;}
+    .history-item { background: var(--bg-surface); padding: 8px; border-radius: 4px; border-left: 3px solid var(--primary); }
+    .history-item.death { border-left-color: var(--danger); }
+    .history-item.system { border-left-color: var(--text-muted); opacity: 0.8; }
+    
+    textarea.notepad { height: 100%; resize: none; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 100; }
+    .modal { background: var(--bg-surface); padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #444; }
+    .modal.active { display: block; }
+    .d-none { display: none !important; }
+    
+    button { transition: all 0.2s; }
+    button:hover { filter: brightness(1.1); transform: scale(1.02); }
+    button:active { transform: scale(0.98); }
+    
+    .toast-container { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 200; pointer-events: none; }
+    .toast { background: var(--bg-surface); color: var(--text); border: 1px solid #444; padding: 10px 20px; border-radius: 20px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); opacity: 0; animation: toastIn 0.3s forwards, toastOut 0.3s forwards 2.7s; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
+
+    .dropdown-container { position: relative; width: 100%; flex: 1; }
+    .custom-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-surface); border: 1px solid var(--primary); border-radius: 8px; margin-top: 5px; z-index: 100; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    .dropdown-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #333; }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:hover { background: rgba(187,134,252,0.2); }
+    .dropdown-item .highlight { color: var(--primary); font-weight: bold; }
+
+    .role-card { flex: 1; max-height: 300px; border-radius: 8px; padding: 5px; overflow-y: auto; box-shadow: inset 0 0 20px rgba(0,0,0,0.2); }
+    .role-card.village { background: rgba(187, 134, 252, 0.05); border: 1px solid rgba(187, 134, 252, 0.3); }
+    .role-card.neutral { background: rgba(3, 218, 198, 0.05); border: 1px solid rgba(3, 218, 198, 0.3); }
+    .role-card.wolf { background: rgba(255, 68, 68, 0.05); border: 1px solid rgba(255, 68, 68, 0.3); }
+
+    .role-village { color: var(--village); }
+    .role-wolf { color: var(--wolf); }
+    .role-neutral { color: var(--neutral); }
+    .role-cupid-team { color: var(--cupid); }
+    .role-tanner-team { color: var(--tanner); }
+    
+    /* Custom Scrollbar */
+    .role-card::-webkit-scrollbar, .custom-dropdown::-webkit-scrollbar, textarea.notepad::-webkit-scrollbar, .role-preset-list::-webkit-scrollbar, .setup-list::-webkit-scrollbar { width: 6px; }
+    .role-card::-webkit-scrollbar-track, .custom-dropdown::-webkit-scrollbar-track, textarea.notepad::-webkit-scrollbar-track, .role-preset-list::-webkit-scrollbar-track, .setup-list::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 4px; }
+    .role-card::-webkit-scrollbar-thumb, .custom-dropdown::-webkit-scrollbar-thumb, textarea.notepad::-webkit-scrollbar-thumb, .role-preset-list::-webkit-scrollbar-thumb, .setup-list::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+    .role-card::-webkit-scrollbar-thumb:hover, .custom-dropdown::-webkit-scrollbar-thumb:hover, textarea.notepad::-webkit-scrollbar-thumb:hover, .role-preset-list::-webkit-scrollbar-thumb:hover, .setup-list::-webkit-scrollbar-thumb:hover { background: #666; }
+    .potion-icon { font-size: 24px; opacity: 1; transition: opacity 0.3s; }
+  .potion-icon.used { opacity: 0.2; filter: grayscale(1); }
+  .seer-result-box { margin-top: 15px; padding: 10px; background: rgba(var(--primary-rgb), 0.1); border-radius: 8px; border: 1px solid var(--primary); }
+  .seer-result-box span { font-weight: bold; color: var(--primary); }
+
+  /* Mobile improvements for role pool */
+  @media (max-width: 520px) {
+    #setup-pool-grid {
+      flex-direction: column;
+      gap: 12px;
+    }
+    .role-card {
+      max-height: 240px;
+      padding: 10px;
+      font-size: 15px;
+      line-height: 1.25;
+    }
+    .setup-item {
+      padding: 10px 8px;
+    }
+    .counter-controls {
+      gap: 12px;
+    }
+    .counter-btn {
+      width: 38px;
+      height: 38px;
+      font-size: 20px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div><span id="strength-label">Balance: </span><span id="strength-value" class="strength">0</span></div>
+  <div class="flex-gap">
+    <button class="danger small i18n" data-i18n="reset" onclick="resetGame()">Reset</button>
+    <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
+  </div>
+</header>
+
+<main>
+  <!-- REGISTRY TAB (SETUP) -->
+  <div id="tab-registry" class="tab-content active">
+    <!-- Presets -->
+    <div class="card">
+      <h3 class="mb-3">Player Database</h3>
+      <div class="flex-gap" style="margin-bottom: 10px;">
+        <select id="preset-select" style="margin:0;"></select>
+        <button onclick="deletePreset()" class="danger" style="padding: 0 15px;">X</button>
+      </div>
+      <div class="flex-gap">
+        <input type="text" id="preset-name" placeholder="New Player Name" style="margin:0;">
+        <button onclick="savePreset()" class="i18n" data-i18n="save">Save</button>
+      </div>
+    </div>
+    
+    <!-- Players -->
+    <div class="card">
+      <div class="flex-between" style="margin-bottom: 10px;">
+        <h3 class="i18n" data-i18n="players">Players</h3>
+        <span id="player-count">0</span>
+      </div>
+      <div class="flex-gap" style="margin-bottom: 10px;">
+        <div class="dropdown-container">
+          <input type="text" id="new-player-name" placeholder="Player Name" style="margin:0;" class="i18n-ph" data-i18n="player_name" oninput="handleDropdownInput()" onclick="handleDropdownInput()" autocomplete="off" onkeypress="if(event.key==='Enter') addSetupPlayer()">
+          <div id="custom-dropdown" class="custom-dropdown d-none"></div>
+        </div>
+        <button onclick="addSetupPlayer()">+</button>
+      </div>
+      <div class="setup-list" id="setup-players-list"></div>
+    </div>
+    
+    <!-- Role Pool -->
+    <div class="card">
+      <div class="flex-between" style="margin-bottom: 10px;">
+        <h3 class="i18n" data-i18n="role_pool">Role Pool</h3>
+        <div class="flex-gap">
+          <button onclick="openRoleMenu()" class="outline small" style="padding: 2px 8px;">☰ Menu</button>
+          <span id="pool-count" style="line-height: 2;">0</span>
+        </div>
+      </div>
+      <div id="setup-pool-grid" style="display: flex; gap: 10px; width: 100%;">
+        <div class="role-card village" id="setup-pool-village"></div>
+        <div class="role-card neutral" id="setup-pool-neutral"></div>
+        <div class="role-card wolf" id="setup-pool-wolf"></div>
+      </div>
+    </div>
+    
+    <div class="flex-gap" style="flex-direction: column; margin-top: 10px;">
+      <button onclick="startGame()" class="i18n" data-i18n="start_game" id="btn-start-game" style="padding: 15px; width: 100%;">Start Game</button>
+      <button onclick="resetGame()" class="outline danger i18n" data-i18n="end_game" id="btn-end-game" style="padding: 15px; width: 100%; display: none;">End Game</button>
+    </div>
+  </div>
+
+  <!-- PANEL TAB (GAME) -->
+  <div id="tab-panel" class="tab-content">
+    <div style="text-align: center;">
+      <div id="mapping-banner" class="mapping-banner d-none">Mapping Mode</div>
+      <div id="action-instruction" class="action-instruction"></div>
+      <div id="wake-up-quote" style="font-size: 18px; font-weight: bold; font-style: italic; margin-bottom: 15px; min-height: 50px;"></div>
+      <div id="panel-info" style="margin-bottom: 10px; color: var(--text-muted); font-size: 14px;"></div>
+      
+      <div class="flex-gap" style="justify-content: center; margin-bottom: 20px;">
+        <button id="btn-undo" onclick="undo()" class="outline i18n" data-i18n="undo">Undo</button>
+        <button id="btn-skip" onclick="skipAction()" class="i18n" data-i18n="skip">Skip</button>
+        <button id="btn-confirm" onclick="confirmAction()" class="i18n" data-i18n="confirm">Confirm</button>
+      </div>
+      <div class="flex-gap" id="morning-buttons" style="display: none; justify-content: center; margin-bottom: 20px;">
+        <button onclick="processMorningLynching()" class="danger i18n" data-i18n="lynch">Lynch Selected</button>
+        <button onclick="skipMorning()" class="i18n" data-i18n="sleep">Go to Sleep</button>
+      </div>
+    </div>
+    <div class="player-grid" id="panel-grid"></div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" class="tab-content">
+    <h2 class="i18n" data-i18n="history">History Log</h2>
+    <div class="history-log" id="history-log"></div>
+  </div>
+
+  <!-- NOTEPAD TAB -->
+  <div id="tab-notepad" class="tab-content">
+    <textarea id="notepad-text" class="notepad" placeholder="Moderator notes..." oninput="saveNotepad()"></textarea>
+  </div>
+</main>
+
+<nav>
+  <div class="nav-item active" onclick="switchTab('registry')" id="nav-registry"><span class="i18n" data-i18n="registry">Setup</span></div>
+  <div class="nav-item" onclick="switchTab('panel')" id="nav-panel"><span class="i18n" data-i18n="panel">Panel</span></div>
+  <div class="nav-item" onclick="switchTab('history')" id="nav-history"><span class="i18n" data-i18n="history">History</span></div>
+  <div class="nav-item" onclick="switchTab('notepad')" id="nav-notepad"><span class="i18n" data-i18n="notepad">Notepad</span></div>
+</nav>
+
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <h2 class="mb-3 i18n" data-i18n="settings">Settings</h2>
+    <div class="flex-between mb-3">
+      <span class="i18n" data-i18n="language">Language</span>
+      <select id="lang-select" onchange="changeLang(this.value)" style="width: auto; margin:0;">
+        <option value="en">English</option>
+        <option value="vi">Tiếng Việt</option>
+      </select>
+    </div>
+    <button onclick="toggleSettings()" class="i18n" data-i18n="close" style="width: 100%">Close</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="role-menu-modal">
+  <div class="modal">
+    <h2 class="mb-3">Role Layouts</h2>
+    <div class="flex-gap" style="margin-bottom: 15px;">
+      <input type="text" id="new-role-preset-name" placeholder="Layout Name" style="margin:0;">
+      <button onclick="saveCurrentRolePreset()">Save</button>
+    </div>
+    <div id="role-preset-list" class="role-preset-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border-top: 1px solid #444; padding-top: 10px;"></div>
+    <button onclick="closeRoleMenu()" class="outline" style="width: 100%">Close</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+<div class="modal-overlay" id="custom-modal">
+  <div class="modal">
+    <h3 id="modal-title" style="margin-bottom: 15px;"></h3>
+    <p id="modal-message" style="margin-bottom: 20px; color: var(--text-muted); line-height: 1.5;"></p>
+    <div class="flex-gap" style="justify-content: flex-end;" id="modal-buttons"></div>
+  </div>
+</div>
+
+<script>
+const ROLES = {
+  village: { en: "Village", vi: "Dân làng", score: 1, team: "village", emoji: "👨‍🌾", recognitionOnly: true },
+  bodyguard: { en: "Bodyguard", vi: "Bảo vệ", score: 3, team: "village", emoji: "🛡️" },
+  hunter: { en: "Hunter", vi: "Thợ săn", score: 3, team: "village", emoji: "🏹", recognitionOnly: true },
+  seer: { en: "Seer", vi: "Tiên tri", score: 7, team: "village", emoji: "🔮" },
+  apprentice_seer: { en: "Apprentice Seer", vi: "Tiên tri tập sự", score: 4, team: "village", emoji: "🕯️", recognitionOnly: true },
+  witch: { en: "Witch", vi: "Phù thủy", score: 4, team: "village", emoji: "🧪" },
+  spellcaster: { en: "Spellcaster", vi: "Pháp sư câm", score: 1, team: "village", emoji: "🤫" },
+  lycan: { en: "Lycan", vi: "Người lai sói", score: -1, team: "village", emoji: "🐺👤", recognitionOnly: true },
+  huntress: { en: "Huntress", vi: "Nữ thợ săn", score: 3, team: "village", emoji: "🎯" },
+  revealer: { en: "Revealer", vi: "Người khám phá", score: 4, team: "village", emoji: "👁️" },
+  prince: { en: "Prince", vi: "Hoàng tử", score: 3, team: "village", emoji: "👑", recognitionOnly: true },
+  tough_guy: { en: "Tough Guy", vi: "Lực sĩ", score: 3, team: "village", emoji: "🏋️", recognitionOnly: true },
+  tanner: { en: "Tanner", vi: "Chán đời", score: -3, team: "neutral", emoji: "😫", recognitionOnly: true },
+  cursed: { en: "Cursed", vi: "Kẻ bị nguyền", score: -3, team: "neutral", emoji: "🌑", recognitionOnly: true },
+  bloody_mary: { en: "Bloody Mary", vi: "Bloody Mary", score: 1, team: "neutral", emoji: "🩸", recognitionOnly: true },
+  cupid: { en: "Cupid", vi: "Cupid", score: -3, team: "neutral", emoji: "💘" },
+  werewolf: { en: "Werewolf", vi: "Ma sói", score: -6, team: "wolf", emoji: "🐺" },
+  fang_face: { en: "Fang Face", vi: "Sói răng thỏ", score: -5, team: "wolf", emoji: "🧛", recognitionOnly: true },
+  dire_wolf: { en: "Dire Wolf", vi: "Sói đau khổ", score: -4, team: "wolf", emoji: "🖤" },
+  wolf_cub: { en: "Wolf Cub", vi: "Sói trẻ", score: -8, team: "wolf", emoji: "🐺🐾", recognitionOnly: true },
+  wolf_man: { en: "Wolf Man", vi: "Người sói", score: -9, team: "wolf", emoji: "👤🐺", recognitionOnly: true },
+  alpha_wolf: { en: "Alpha Wolf", vi: "Sói đầu đàn", score: -9, team: "wolf", emoji: "🐺👑" }
+};
+
+const I18N = {
+  en: {
+    registry: "Setup", panel: "Panel", history: "History", notepad: "Notepad",
+    presets: "Presets", load: "Load", save: "Save", preset_name: "Preset Name",
+    players: "Players", player_name: "Player Name", role_pool: "Role Pool",
+    start_game: "Start Game", end_game: "End Game", undo: "Undo", skip: "Skip", confirm: "Confirm",
+    settings: "Settings", language: "Language", close: "Close", sleep: "Go to Sleep", lynch: "Lynch Selected",
+    phase_morning: "Day {day} - Morning", phase_night: "Night {day}",
+    map_role: "Map Role: {role} ({count} left)", map_btn: "Assign Role",
+    wake_gen: "{role}, wake up.",
+    wake_cupid: "Cupid, wake up. Choose two players to be the Lovers. Lovers, wake up and look at each other. You may now see each other's cards.",
+    wake_bodyguard: "Bodyguard, wake up. Choose one person to protect tonight.",
+    wake_dire_wolf: "Dire Wolf, wake up. Choose one person to be your lover.",
+    wake_spellcaster: "Spellcaster, wake up. Choose one person to silence for tomorrow morning.",
+    wake_werewolves_group: "Werewolves, wake up. Choose your victim.",
+    wake_witch: "Witch, wake up. These players will die tonight {names}. Will you use your healing potion or your poison tonight?",
+    wake_seer: "Seer, wake up. Choose one person to inspect. Nod is wolf, shake is not wolf. [Result: {res}]",
+    wake_huntress: "Huntress, wake up. You have one shot. Will you use it tonight to kill a player?",
+    wake_revealer: "Revealer, wake up. You may choose one person to reveal. If they are a wolf, they die. If they are not, you die.",
+    wake_alpha_wolf: "Alpha Wolf, wake up. You may choose one villager to secretly convert to your side tonight.",
+    wake_bloody_mary_revenge: "Bloody Mary, you have seen the wolves. Choose your target for revenge.",
+    log_lynch: "{name} was lynched.", log_kill: "{name} killed by {source}.",
+    hist_game_started: "Game Started.",
+    hist_manual_override: "Manual override: {name} is now {state}.",
+    hist_protected: "{name} was protected from attack.",
+    hist_wolves_targeted: "Werewolves targeted {name}.",
+    hist_alpha_convert_success: "Werewolves converted {name} into a Werewolf.",
+    hist_alpha_convert_fail_protected: "Alpha conversion FAILED on {name} (protected).",
+    hist_alpha_convert_fail_cupid_kill_protected: "Alpha conversion->kill FAILED on {name} (protected).",
+    hist_alpha_convert_hit_cupid_kill: "Alpha conversion hit Cupid team — {name} dies instead.",
+    hist_alpha_convert_fail_cupid: "Alpha conversion FAILED on {name} (Cupid team).",
+    hist_alpha_convert_fail_revealed_prince: "Alpha conversion FAILED on {name} (revealed Prince).",
+    hist_cursed_turn: "{name} was bitten (Cursed) and turned into a Werewolf.",
+    hist_bm_revenge_armed: "Bloody Mary revenge armed ({rule} next night).",
+    hist_witch_heal_wasted: "Witch used healing potion on {name}, but it had no effect.",
+    hist_dw_dies_too: "{name} (Dire Wolf) also dies because their lover died.",
+    game_over: "Game Over! {team} wins!", seer_wolf: "Wolf", seer_human: "Human", unmapped: "?",
+    reset: "Reset", sunrise_intro: "Everyone wakes up. These players died:"
+  },
+  vi: {
+    registry: "Thiết lập", panel: "Bảng đ.khiển", history: "Lịch sử", notepad: "Ghi chú",
+    presets: "Bản lưu", load: "Tải", save: "Lưu", preset_name: "Tên bản lưu",
+    players: "Người chơi", player_name: "Tên người chơi", role_pool: "Vai trò",
+    start_game: "Bắt đầu", end_game: "Kết thúc", undo: "Hoàn tác", skip: "Bỏ qua", confirm: "Xác nhận",
+    settings: "Cài đặt", language: "Ngôn ngữ", close: "Đóng", sleep: "Đi ngủ", lynch: "Treo cổ",
+    phase_morning: "Ngày {day} - Buổi sáng", phase_night: "Đêm {day}",
+    map_role: "Gán vai: {role} (còn {count})", map_btn: "Xác nhận Gán",
+    wake_gen: "{role}, hãy thức dậy.",
+    wake_cupid: "Cupid, hãy thức dậy. Chọn hai người chơi để kết đôi.",
+    wake_bodyguard: "Bảo vệ, hãy thức dậy. Chọn một người để bảo vệ đêm nay.",
+    wake_dire_wolf: "Sói đau khổ, hãy thức dậy. Chọn một người làm người yêu.",
+    wake_spellcaster: "Pháp sư câm, hãy thức dậy. Chọn một người để khóa miệng.",
+    wake_werewolves_group: "Ma sói, hãy thức dậy. Chọn nạn nhân của các bạn.",
+    wake_witch: "Phù thủy, hãy thức dậy. Sắp chết: {names}. Dùng thuốc?",
+    wake_seer: "Tiên tri, thức dậy. Soi một người. [Kết quả: {res}]",
+    wake_huntress: "Nữ thợ săn, thức dậy. Bạn có muốn bắn không?",
+    wake_revealer: "Người khám phá, thức dậy. Lật mặt một người.",
+    wake_alpha_wolf: "Sói đầu đàn, thức dậy. Chọn một dân làng để bí mật chuyển sang phe sói.",
+    wake_bloody_mary_revenge: "Bloody Mary, bạn đã nhìn thấy lũ sói. Chọn mục tiêu để trả thù.",
+    log_lynch: "{name} đã bị treo cổ.", log_kill: "{name} bị giết bởi {source}.",
+    hist_game_started: "Trò chơi bắt đầu.",
+    hist_manual_override: "Can thiệp thủ công: {name} hiện đang {state}.",
+    hist_protected: "{name} đã được bảo vệ khỏi tấn công.",
+    hist_wolves_targeted: "Ma sói nhắm vào {name}.",
+    hist_alpha_convert_success: "{name} đã bị chuyển thành Ma sói.",
+    hist_alpha_convert_fail_protected: "Chuyển phe thất bại với {name} (được bảo vệ).",
+    hist_alpha_convert_fail_cupid_kill_protected: "Chuyển phe→giết thất bại với {name} (được bảo vệ).",
+    hist_alpha_convert_hit_cupid_kill: "Chuyển phe trúng đội Cupid — {name} chết thay vì bị chuyển.",
+    hist_alpha_convert_fail_cupid: "Chuyển phe thất bại với {name} (đội Cupid).",
+    hist_alpha_convert_fail_revealed_prince: "Chuyển phe thất bại với {name} (Hoàng tử đã lộ).",
+    hist_cursed_turn: "{name} bị cắn (Kẻ bị nguyền) và hóa thành Ma sói.",
+    hist_bm_revenge_armed: "Bloody Mary đã kích hoạt trả thù ({rule} đêm sau).",
+    hist_witch_heal_wasted: "Phù thủy dùng bình cứu cho {name} nhưng không có tác dụng.",
+    hist_dw_dies_too: "{name} (Sói đau khổ) cũng chết vì người yêu chết.",
+    game_over: "Trò chơi kết thúc! {team} thắng!", seer_wolf: "Sói", seer_human: "Người", unmapped: "?",
+    reset: "Đặt lại", sunrise_intro: "Mọi người đều thức dậy. Những người sau đây đã chết:"
+  }
+};
+
+let STATE = {
+  lang: "en",
+  setupNames: [],
+  setupPool: {},
+  knownPlayers: [],
+  players: [],
+  poolRemaining: {},
+  gameStarted: false,
+  day: 1,
+  phaseStep: 0,
+  history: [],
+  undoStack: [],
+  nightDeaths: [],
+  witchHealUsed: false,
+  witchPoisonUsed: false,
+  huntressUsed: false,
+  alphaWolfTriggered: false,
+  alphaWolfUsed: false,
+  lastBodyguardProtectedId: null,
+  lastSpellcasterSilencedId: null,
+  bloodyMaryRevenge: null, // { mustTargetTeam: 'wolf' | 'non_wolf', mustTargetSource: 'night' | 'morning' }
+  bloodyMaryDone: false,
+  gameOverAnnounced: false,
+  selectedTargets: [],
+  gameOver: false,
+  winningTeam: "",
+  notepad: ""
+};
+
+let PRESETS = [];
+let ROLE_PRESETS = [];
+
+// --- INITIALIZATION ---
+function init() {
+  const saved = localStorage.getItem('wwStatev2');
+  if (saved) {
+    try { const parsed = JSON.parse(saved); if (parsed.lang) STATE = parsed; } catch(e){}
+  }
+  const savedPresets = localStorage.getItem('wwPresets');
+  if (savedPresets) {
+    try { PRESETS = JSON.parse(savedPresets); } catch(e){}
+  }
+  const savedRolePresets = localStorage.getItem('werewolf_role_presets');
+  if (savedRolePresets) {
+    try { ROLE_PRESETS = JSON.parse(savedRolePresets); } catch(e){}
+  }
+  
+  if (Object.keys(STATE.setupPool).length === 0) {
+    for (let key in ROLES) STATE.setupPool[key] = 0;
+  }
+  
+  document.getElementById('lang-select').value = STATE.lang;
+  document.getElementById('notepad-text').value = STATE.notepad || "";
+  
+  updateUI();
+}
+
+function saveState() { localStorage.setItem('wwStatev2', JSON.stringify(STATE)); updateUI(); }
+function savePresets() { localStorage.setItem('wwPresets', JSON.stringify(PRESETS)); updateUI(); }
+function saveRolePresets() { localStorage.setItem('werewolf_role_presets', JSON.stringify(ROLE_PRESETS)); }
+
+function openRoleMenu() {
+  document.getElementById('role-menu-modal').style.display = 'flex';
+  renderRoleMenu();
+}
+
+function closeRoleMenu() {
+  document.getElementById('role-menu-modal').style.display = 'none';
+}
+
+function renderRoleMenu() {
+  let list = document.getElementById('role-preset-list');
+  list.innerHTML = '';
+  ROLE_PRESETS.forEach((rp, i) => {
+    list.innerHTML += `
+      <div class="history-item flex-between" style="margin-bottom: 5px; padding: 10px;">
+        <div style="flex: 1; margin-right: 10px;">
+          <div style="font-weight: bold; margin-bottom: 3px;">${rp.name}</div>
+          <div style="font-size: 11px; color: var(--text-muted);">${rp.summary}</div>
+        </div>
+        <div class="flex-gap" style="flex-shrink: 0;">
+          <button onclick="loadRolePreset(${i})" class="outline small" style="padding: 2px 8px;">Load</button>
+          <button onclick="deleteRolePreset(${i})" class="danger small" style="padding: 2px 8px;">X</button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+function getRoleSummary(pool) {
+  let count = 0;
+  let parts = [];
+  for (let k in pool) {
+    if (pool[k] > 0) {
+      count += pool[k];
+      parts.push(`${pool[k]} ${getRoleName(k)}`);
+    }
+  }
+  return `${count} Roles: ` + parts.join(', ');
+}
+
+function saveCurrentRolePreset() {
+  let name = document.getElementById('new-role-preset-name').value.trim();
+  if (!name) return showToast("Please enter a name");
+  let pool = JSON.parse(JSON.stringify(STATE.setupPool));
+  let summary = getRoleSummary(pool);
+  ROLE_PRESETS.push({ name, pool, summary });
+  saveRolePresets();
+  document.getElementById('new-role-preset-name').value = '';
+  renderRoleMenu();
+  showToast("Role Layout Saved!");
+}
+
+function loadRolePreset(i) {
+  STATE.setupPool = JSON.parse(JSON.stringify(ROLE_PRESETS[i].pool));
+  saveState();
+  closeRoleMenu();
+  showToast("Role Layout Loaded!");
+}
+
+function deleteRolePreset(i) {
+  ROLE_PRESETS.splice(i, 1);
+  saveRolePresets();
+  renderRoleMenu();
+}
+
+function pushUndo() {
+  const clone = JSON.parse(JSON.stringify(STATE));
+  clone.undoStack = [];
+  STATE.undoStack.push(clone);
+  if (STATE.undoStack.length > 20) STATE.undoStack.shift();
+}
+function undo() {
+  if (STATE.undoStack.length === 0) return;
+  const last = STATE.undoStack.pop();
+  const st = STATE.undoStack;
+  STATE = last;
+  STATE.undoStack = st;
+  saveState();
+}
+
+function t(key, vars={}) {
+  let str = I18N[STATE.lang][key];
+  if (!str) return null;
+  for (let k in vars) str = str.replace(`{${k}}`, vars[k]);
+  return str;
+}
+function getRoleName(k) { return ROLES[k] ? ROLES[k][STATE.lang] : k; }
+function changeLang(l) { STATE.lang = l; saveState(); }
+function toggleSettings() { const m = document.getElementById('settings-modal'); m.style.display = m.style.display === 'flex' ? 'none' : 'flex'; }
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('nav-'+tab).classList.add('active');
+}
+
+let currentConfirmAction = null;
+function executeConfirm() { document.getElementById('custom-modal').style.display='none'; if(currentConfirmAction) currentConfirmAction(); }
+function showConfirm(title, msg, onConfirm) {
+  currentConfirmAction = onConfirm;
+  const m = document.getElementById('custom-modal');
+  document.getElementById('modal-title').innerText = title;
+  document.getElementById('modal-message').innerText = msg;
+  const btns = document.getElementById('modal-buttons');
+  btns.innerHTML = `<button class="outline" onclick="document.getElementById('custom-modal').style.display='none'">Cancel</button>
+                    <button onclick="executeConfirm()">Confirm</button>`;
+  m.style.display = 'flex';
+}
+function showAlert(title, msg) {
+  const m = document.getElementById('custom-modal');
+  document.getElementById('modal-title').innerText = title;
+  document.getElementById('modal-message').innerText = msg;
+  const btns = document.getElementById('modal-buttons');
+  btns.innerHTML = `<button onclick="document.getElementById('custom-modal').style.display='none'">OK</button>`;
+  m.style.display = 'flex';
+}
+function showToast(msg) {
+  let c = document.getElementById('toast-container');
+  let t = document.createElement('div'); t.className = 'toast'; t.innerText = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function handleDropdownInput() {
+  const input = document.getElementById('new-player-name');
+  const dd = document.getElementById('custom-dropdown');
+  let val = input.value.trim().toLowerCase();
+  
+  if (!STATE.knownPlayers || STATE.knownPlayers.length === 0) { dd.classList.add('d-none'); return; }
+  
+  let matches = STATE.knownPlayers.filter(n => val === '' || n.toLowerCase().includes(val));
+  if (matches.length === 0) { dd.classList.add('d-none'); return; }
+  
+  dd.innerHTML = '';
+  matches.forEach(n => {
+    let div = document.createElement('div');
+    div.className = 'dropdown-item';
+    
+    let nameContainer = document.createElement('span');
+    if (val === '') { nameContainer.innerText = n; }
+    else {
+      let idx = n.toLowerCase().indexOf(val);
+      let before = n.substring(0, idx);
+      let match = n.substring(idx, idx + val.length);
+      let after = n.substring(idx + val.length);
+      nameContainer.innerHTML = `${before}<span class="highlight">${match}</span>${after}`;
+    }
+    div.appendChild(nameContainer);
+    
+    const triggerAdd = function(e) {
+      e.preventDefault();
+      input.value = n;
+      dd.classList.add('d-none');
+      addSetupPlayer();
+    };
+    div.onmousedown = triggerAdd;
+    div.ontouchstart = triggerAdd;
+    
+    dd.appendChild(div);
+  });
+  dd.classList.remove('d-none');
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.dropdown-container')) {
+    let dd = document.getElementById('custom-dropdown');
+    if(dd) dd.classList.add('d-none');
+  }
+});
+
+function saveNotepad() { STATE.notepad = document.getElementById('notepad-text').value; saveState(); }
+
+// --- SETUP & PRESETS ---
+function addSetupPlayer() {
+  const input = document.getElementById('new-player-name');
+  let val = input.value.trim();
+  if (!val) return;
+  
+  if (STATE.setupNames.some(n => n.toLowerCase() === val.toLowerCase())) {
+    input.value = '';
+    return;
+  }
+  
+  STATE.setupNames.push(val);
+  input.value = '';
+  let dd = document.getElementById('custom-dropdown');
+  if(dd) dd.classList.add('d-none');
+  saveState();
+}
+function removeSetupPlayer(idx) { STATE.setupNames.splice(idx, 1); saveState(); }
+function modifyPool(role, amount) {
+  STATE.setupPool[role] = Math.max(0, (STATE.setupPool[role] || 0) + amount);
+  saveState();
+}
+
+function savePreset() {
+  let name = document.getElementById('preset-name').value.trim();
+  if (!name) return;
+  // Just save the name as an entry in the database
+  PRESETS.push({ name, names: [], pool: {} });
+  document.getElementById('preset-name').value = '';
+  savePresets();
+  showToast("Player added to database");
+}
+
+function deletePreset() {
+  const sel = document.getElementById('preset-select');
+  if (sel.selectedIndex < 0) return;
+  const name = PRESETS[sel.selectedIndex].name;
+  PRESETS.splice(sel.selectedIndex, 1);
+  savePresets();
+  showToast(`'${name}' deleted from database`);
+}
+
+// --- GAME LOOP ---
+function startGame() {
+  let totalRoles = Object.values(STATE.setupPool).reduce((a,b)=>a+b,0);
+  if (totalRoles > STATE.setupNames.length) return showAlert("Notice", "More roles than players!");
+  
+  pushUndo();
+  STATE.gameStarted = true;
+  STATE.day = 1;
+  STATE.phaseStep = 0;
+  STATE.history = [];
+  STATE.nightDeaths = [];
+  STATE.gameOver = false;
+  STATE.selectedTargets = [];
+  STATE.poolRemaining = {...STATE.setupPool};
+  
+  STATE.players = STATE.setupNames.map((name, i) => ({
+    id: 'p'+i, name, role: null, originalRole: null, isDead: false, silenced: false,
+    protected: false, lovers: [], tannerLover: false, cursedBitten: false, toughGuyBitten: 0,
+    alphaWolfConverted: false, direWolfTarget: null,
+    princeRevealed: false
+  }));
+  STATE.nightDeaths = [];
+  STATE.hunterPendingShot = [];
+  STATE.wolfCubPendingShot = [];
+  STATE.bloodyMaryRevenge = null;
+  STATE.bloodyMaryDone = false;
+  STATE.gameOverAnnounced = false;
+  STATE.witchHealUsed = false;
+  STATE.witchPoisonUsed = false;
+  STATE.huntressUsed = false;
+  STATE.alphaWolfTriggered = false;
+  STATE.alphaWolfUsed = false;
+  STATE.lastBodyguardProtectedId = null;
+  STATE.lastSpellcasterSilencedId = null;
+  STATE.deathsThisNight = [];
+  
+  addHistoryT("system", "hist_game_started");
+  STATE.day = 0.5;
+  STATE.phaseStep = 0;
+  STATE.powerDone = false;
+  switchTab('panel');
+  saveState();
+}
+
+function resetGame() {
+  showConfirm("End Game", "Are you sure you want to end this game?", () => {
+    pushUndo();
+    STATE.gameStarted = false;
+    saveState();
+    switchTab('registry');
+  });
+}
+
+// Wolf refinement roles — these are picked FROM the wolf_pending pool
+const SPECIAL_WOLVES = ['dire_wolf', 'wolf_man', 'wolf_cub', 'fang_face', 'alpha_wolf'];
+
+const PHASE_ORDER = [
+    { role: 'cupid',            map: true,  power: true  },
+    { role: 'bloody_mary',      map: true,  power: false },
+    { role: 'cursed',           map: true,  power: false },
+    { role: 'tanner',           map: true,  power: false },
+    { role: 'lycan',            map: true,  power: false },
+    { role: 'tough_guy',        map: true,  power: false },
+    { role: 'prince',           map: true,  power: false },
+    { role: 'hunter',           map: true,  power: false },
+    { role: 'apprentice_seer',  map: true,  power: false },
+    { role: 'bodyguard',        map: true,  power: true  },
+    // werewolves_group: map=true means Night 1 assigns ALL wolves as wolf_pending, then they kill
+    { role: 'werewolves_group', map: true,  power: true,  displayName: 'Werewolves' },
+    // Special wolves: refine 1 wolf_pending into this specific role, then power (if any)
+    // Alpha Wolf is refined on Night 1, but its "convert" power is executed by the werewolves group
+    // on the night after a wolf dies in the morning (and only if Alpha Wolf is alive).
+    { role: 'alpha_wolf',       map: true,  power: false },
+    { role: 'dire_wolf',        map: true,  power: true  },
+    { role: 'wolf_man',         map: true,  power: false },
+    { role: 'wolf_cub',         map: true,  power: false },
+    { role: 'fang_face',        map: true,  power: false },
+    { role: 'spellcaster',      map: true,  power: true  },
+    { role: 'witch',            map: true,  power: true  },
+    { role: 'seer',             map: true,  power: true  },
+    { role: 'huntress',         map: true,  power: true  },
+    { role: 'revealer',         map: true,  power: true  },
+    { role: 'bloody_mary_revenge', map: false, power: true, displayName: 'Bloody Mary Revenge' }
+];
+
+function getCurrentPhaseData() {
+  if (STATE.gameOver) return { type: 'game_over' };
+  
+  if (STATE.hunterPendingShot && STATE.hunterPendingShot.length > 0) {
+    let hp = STATE.players.find(x=>x.id===STATE.hunterPendingShot[0]);
+    return { type: 'hunter_revenge', role: 'hunter', name: hp.name, instruction: "Hunter, take your final shot!" };
+  }
+  
+  if (STATE.wolfCubPendingShot && STATE.wolfCubPendingShot.length > 0) {
+    let hp = STATE.players.find(x=>x.id===STATE.wolfCubPendingShot[0]);
+    return { type: 'wolf_cub_revenge', role: 'wolf_cub', name: hp.name, instruction: "Wolf Cub, take someone with you!" };
+  }
+
+  if (STATE.day % 1 !== 0) { // Night Phase (0.5, 1.5, 2.5, ...)
+    let stepIdx = STATE.phaseStep;
+
+    while (stepIdx < PHASE_ORDER.length) {
+      let step = PHASE_ORDER[stepIdx];
+
+      // ── Skip checks ────────────────────────────────────────────────────────
+
+      // Cupid: only once on the first night
+      if (step.role === 'cupid' && STATE.day !== 0.5) { stepIdx++; continue; }
+
+      // Dire Wolf: choose lover only once on the first night
+      if (step.role === 'dire_wolf' && STATE.day !== 0.5) { stepIdx++; continue; }
+
+      // Bloody Mary Revenge: only if she actually died
+      if (step.role === 'bloody_mary_revenge') {
+        let bm = STATE.players.find(p => p.role === 'bloody_mary');
+        if (!bm || !bm.isDead || STATE.bloodyMaryDone || !STATE.bloodyMaryRevenge) { stepIdx++; continue; }
+      }
+
+      // werewolves_group: skip if no wolves at all in pool
+      else if (step.role === 'werewolves_group') {
+        let wolfTotal = ['werewolf','dire_wolf','wolf_man','wolf_cub','fang_face','alpha_wolf']
+          .reduce((s, w) => s + (STATE.setupPool[w] || 0), 0);
+        if (wolfTotal === 0) { stepIdx++; continue; }
+      }
+
+      // Special wolves (dire_wolf etc.): skip if not in pool
+      else if (SPECIAL_WOLVES.includes(step.role)) {
+        if (!(STATE.setupPool[step.role] || 0)) { stepIdx++; continue; }
+      }
+
+      // All other roles: skip if not in pool
+      else if (!['bloody_mary_revenge','werewolves_group'].includes(step.role)) {
+        if (!(STATE.setupPool[step.role] || 0)) { stepIdx++; continue; }
+      }
+
+      // ── Mapping (Night 1 only: day === 0.5) ────────────────────────────────
+      if (STATE.day === 0.5 && step.map) {
+
+        if (step.role === 'werewolves_group') {
+          // Count ALL wolf slots across every wolf sub-type
+          let wolfTotal = ['werewolf','dire_wolf','wolf_man','wolf_cub','fang_face','alpha_wolf']
+            .reduce((s, w) => s + (STATE.setupPool[w] || 0), 0);
+          // Count players already assigned to ANY wolf role (or pending)
+          let wolfMapped = STATE.players.filter(p =>
+            p.role === 'wolf_pending' || SPECIAL_WOLVES.includes(p.role) || p.role === 'werewolf'
+          ).length;
+          let needed = wolfTotal - wolfMapped;
+          if (needed > 0) {
+            return {
+              type: 'night', role: 'werewolves_group', mapping: true,
+              mapRole: 'wolf_pending',
+              poolForMap: needed,
+              displayName: 'Wolf Team',
+              instruction: `Assign ${needed} players to the Wolf Team (wolf_pending)`,
+              currentStep: stepIdx,
+              isWolfGroup: true
+            };
+          }
+          // All wolves mapped — fall through to power
+
+        } else if (SPECIAL_WOLVES.includes(step.role)) {
+          // Refinement: how many of this sub-type still need to be picked from wolf_pending?
+          let needed = (STATE.setupPool[step.role] || 0);
+          let refined = STATE.players.filter(p => p.role === step.role).length;
+          if (refined < needed) {
+            return {
+              type: 'night', role: step.role, mapping: true,
+              mapRole: step.role,
+              poolForMap: needed - refined,
+              displayName: getRoleName(step.role),
+              instruction: `Identify ${needed - refined} Wolf Team member(s) as ${getRoleName(step.role)}`,
+              currentStep: stepIdx,
+              isWolfRefinement: true
+            };
+          }
+          // Refinement done — fall through to power
+
+        } else {
+          // Normal role mapping
+          let needed = (STATE.setupPool[step.role] || 0);
+          let mapped = STATE.players.filter(p => p.role === step.role).length;
+          if (mapped < needed) {
+            return {
+              type: 'night', role: step.role, mapping: true,
+              mapRole: step.role,
+              poolForMap: needed - mapped,
+              displayName: getRoleName(step.role),
+              instruction: `Assign ${needed - mapped} player(s) as ${getRoleName(step.role)}`,
+              currentStep: stepIdx
+            };
+          }
+        }
+      }
+
+      // ── Power step ─────────────────────────────────────────────────────────
+      if (step.power && !STATE.powerDone) {
+        let displayName = step.displayName || getRoleName(step.role);
+        let instruction = '';
+        if (step.role === 'cupid')                   instruction = 'Select 2 players to be Lovers';
+        else if (step.role === 'bodyguard')          instruction = 'Select 1 player to protect tonight';
+        else if (step.role === 'dire_wolf')          instruction = "Select 1 non-wolf player to be Dire Wolf's lover";
+        else if (step.role === 'spellcaster')        instruction = 'Select 1 player to silence';
+        else if (step.role === 'werewolves_group') {
+          const alphaAlive = STATE.players.some(p => p.role === 'alpha_wolf' && !p.isDead);
+          const doConvert = STATE.alphaWolfTriggered && !STATE.alphaWolfUsed && alphaAlive;
+          instruction = doConvert ? 'Werewolves — select 1 player to CONVERT tonight' : 'Werewolves — select 1 victim to kill';
+        }
+        else if (step.role === 'witch')              instruction = 'Select 1 player to poison (Confirm with no target to skip)';
+        else if (step.role === 'seer')               instruction = 'Select 1 player to inspect';
+        else if (step.role === 'huntress')           instruction = 'Select 1 victim to kill (Confirm with no target to skip)';
+        else if (step.role === 'revealer')           instruction = 'Select 1 player to reveal';
+        else if (step.role === 'bloody_mary_revenge') instruction = 'Select 1 victim for revenge';
+
+        return {
+          type: 'night', role: step.role, mapping: false,
+          displayName, instruction, currentStep: stepIdx
+        };
+      }
+
+      // ── Step fully done — advance ───────────────────────────────────────────
+      stepIdx++;
+    }
+
+    return { type: 'end_night' };
+  }
+
+  return { type: 'morning' };
+}
+
+
+
+function shouldSkipRole(r) {
+  if (r === 'werewolves_group') return false;
+  let p = STATE.players.find(x => x.role === r);
+  if (!p) return true;
+  if (p.isDead) {
+     if (['bodyguard', 'witch', 'seer', 'apprentice_seer', 'huntress', 'revealer', 'spellcaster', 'dire_wolf'].includes(r)) return true;
+  }
+  
+  if (r === 'dire_wolf') {
+    if (STATE.day === 1 && !p.direWolfTarget) return false;
+    return true;
+  }
+
+  if (r === 'fang_face' && STATE.day > 1) {
+    let otherWolves = STATE.players.some(x => !x.isDead && ROLES[x.role]?.team === 'wolf' && x.role !== 'fang_face');
+    if (otherWolves) return true;
+  }
+  if (r === 'alpha_wolf' && (!STATE.alphaWolfTriggered || STATE.alphaWolfUsed)) return true;
+  
+  return false; // Don't skip active roles (Bodyguard, Seer, etc.)
+}
+
+function healTarget(id) {
+  pushUndo();
+  STATE.nightDeaths = STATE.nightDeaths.filter(d => d.id !== id);
+  STATE.witchHealUsed = true;
+  saveState();
+}
+
+function poisonTarget(id) {
+  pushUndo();
+  STATE.nightDeaths.push({id, source: 'witch_poison'});
+  STATE.witchPoisonUsed = true;
+  STATE.selectedTargets = [];
+  saveState();
+}
+
+function killPlayer(id, reason) {
+  let p = STATE.players.find(x => x.id === id);
+  if (!p || p.isDead) return;
+  
+  // Tough Guy delay logic (night attacks only)
+  if (p.role === 'tough_guy' && (reason === 'wolf' || reason === 'night' || reason === 'poison')) {
+    if (!p.toughGuyBitten) {
+        // Die on the next DAY's morning.
+        // Example: bitten Night 1 (0.5) -> alive Day 1 + Night 2 -> die Day 2 morning.
+        // This runs during sunrise resolution (STATE.day is already an integer morning),
+        // so schedule death at next integer day.
+        p.toughGuyBitten = Math.floor(STATE.day) + 1;
+        addHistory("death", t('log_kill', {name: p.name, source: "fatal wound (delayed)"}));
+        return; 
+    }
+  }
+
+  p.isDead = true;
+  if (!STATE.deathsThisNight.includes(p.name)) STATE.deathsThisNight.push(p.name);
+  addHistory("death", t('log_kill', {name: p.name, source: reason}));
+  if (p.role === 'hunter') STATE.hunterPendingShot.push(p.id);
+  if (p.role === 'wolf_cub') STATE.wolfCubPendingShot.push(p.id);
+
+  if (p.role === 'bloody_mary') {
+    // Bloody Mary revenge rules:
+    // - If she dies at night (any source), she must kill a WOLF on the next night.
+    // - If she dies in the morning (lynch / hunter shot / wolf cub revenge), she must kill a VILLAGER (non-wolf) on the next night.
+    const isMorningDeath = ['lynch', 'hunter revenge', 'wolf cub revenge'].includes(reason);
+    STATE.bloodyMaryRevenge = { mustTargetTeam: isMorningDeath ? 'non_wolf' : 'wolf', mustTargetSource: isMorningDeath ? 'morning' : 'night' };
+    const ruleStr = STATE.bloodyMaryRevenge.mustTargetTeam === 'wolf'
+      ? (STATE.lang === 'vi' ? 'phải giết SÓI' : 'must kill a WOLF')
+      : (STATE.lang === 'vi' ? 'phải giết NGƯỜI (không phải sói)' : 'must kill a NON-WOLF');
+    addHistoryT("system", "hist_bm_revenge_armed", { rule: ruleStr });
+  }
+  
+  // Alpha Wolf trigger: only when a wolf dies IN THE MORNING (lynch / hunter shot / wolf cub revenge, etc),
+  // and only if an Alpha Wolf is alive at that moment. Triggers once and is consumed on the next night.
+  const alphaAlive = STATE.players.some(x => x.role === 'alpha_wolf' && !x.isDead);
+  const isMorningDeath = ['lynch', 'hunter revenge', 'wolf cub revenge'].includes(reason);
+  if (alphaAlive && isMorningDeath && p.role && ROLES[p.role]?.team === 'wolf' && !STATE.alphaWolfUsed) {
+    STATE.alphaWolfTriggered = true;
+  }
+  
+  p.lovers.forEach(lid => killPlayer(lid, "heartbreak"));
+  let dw = STATE.players.find(x => x.role === 'dire_wolf' && x.direWolfTarget === id && !x.isDead);
+  if (dw) {
+    const isMorningDeath = ['lynch', 'hunter revenge', 'wolf cub revenge'].includes(reason);
+    if (isMorningDeath) {
+      addHistoryT("system", "hist_dw_dies_too", { name: dw.name });
+      showToast(`${dw.name} (Dire Wolf) also dies!`);
+    }
+    killPlayer(dw.id, "dire wolf anchor died");
+  }
+}
+
+function resolveSunrise() {
+  pushUndo();
+  STATE.day += 0.5;
+  STATE.phaseStep = 0;
+  STATE.powerDone = false;
+  STATE.seerResult = null;
+  STATE.deathsThisNight = [];
+
+  // Convert any wolf_pending players who weren't refined into plain werewolves
+  STATE.players.forEach(p => {
+    if (p.role === 'wolf_pending') {
+      p.role = 'werewolf'; p.originalRole = 'werewolf';
+      p.icon = ROLES['werewolf'].emoji;
+    }
+  });
+  
+  // Auto-assign remaining nulls to Villager after Night 1 (Morning Day 1)
+  // Game starts at Night 1: STATE.day = 0.5. Sunrise -> STATE.day = 1.0.
+  if (STATE.day === 1) {
+    STATE.players.forEach(p => {
+      if (!p.role) { p.role = 'village'; p.originalRole = 'village'; }
+    });
+  }
+  
+  // 1. Process Tough Guy delayed death first (it's from a previous night)
+  STATE.players.forEach(p => {
+    if (p.toughGuyBitten && STATE.day % 1 === 0 && STATE.day >= p.toughGuyBitten) {
+      p.toughGuyBitten = 0;
+      killPlayer(p.id, "delayed wounds");
+    }
+  });
+
+  // 2. Filter night deaths based on protection
+  let actualDeaths = [];
+  STATE.nightDeaths.forEach(d => {
+    let p = STATE.players.find(x=>x.id===d.id);
+    if (!p) return;
+    
+    // Revealer and Witch Poison bypass normal protection
+    let bypassesProtection = (d.source === 'witch_poison' || d.source === 'revealer');
+    
+    if (p.protected && !bypassesProtection) {
+      addHistoryT("system", "hist_protected", { name: p.name });
+    } else {
+      actualDeaths.push(d);
+    }
+  });
+
+  // 3. Resolve all deaths at once
+  actualDeaths.forEach(d => killPlayer(d.id, d.source));
+  
+  // 4. Cleanup
+  STATE.nightDeaths = [];
+  checkGameOver();
+  saveState();
+}
+
+function processNightEnd() {
+  resolveSunrise();
+}
+
+function processMorningLynching() {
+  if (STATE.selectedTargets.length > 0) {
+    pushUndo();
+    let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+    
+    if (p.role === 'prince') {
+      addHistory("system", `${p.name} (Prince) survives lynch.`);
+      p.princeRevealed = true;
+      showAlert("Prince Revealed", `${p.name} is Prince. They live.`);
+    } else {
+      killPlayer(p.id, 'lynch');
+      if (p.role === 'tanner') { STATE.gameOver = true; STATE.winningTeam = "Tanner"; saveState(); return; }
+    }
+    STATE.selectedTargets = [];
+  }
+  checkGameOver();
+  if (!STATE.gameOver) {
+    // Clear one-night effects as we go to sleep
+    STATE.players.forEach(p => p.silenced = false);
+    STATE.day += 0.5; STATE.phaseStep = 0; STATE.nightDeaths = []; STATE.players.forEach(p => p.protected = false); saveState();
+  }
+}
+
+function skipMorning() {
+  // Clear one-night effects as we go to sleep
+  STATE.players.forEach(p => p.silenced = false);
+  pushUndo();
+  STATE.day += 0.5; STATE.phaseStep = 0; STATE.powerDone = false; STATE.nightDeaths = []; STATE.players.forEach(p => p.protected = false); saveState();
+}
+
+function skipAction() {
+  pushUndo();
+  let phase = getCurrentPhaseData();
+  // Always advance phaseStep past the current step
+  // (never set powerDone=true — that would bleed into the next role's power)
+  if (phase.currentStep !== undefined) {
+    STATE.phaseStep = phase.currentStep + 1;
+  } else {
+    STATE.phaseStep++;
+  }
+  STATE.powerDone = false;
+  STATE.selectedTargets = [];
+  // If we skipped the final night role, still advance to sunrise
+  if (getCurrentPhaseData().type === 'end_night') processNightEnd();
+  saveState();
+}
+
+function confirmAction() {
+  pushUndo();
+  let phase = getCurrentPhaseData();
+  
+  if (phase.mapping) {
+    let needed = phase.poolForMap;
+    if (STATE.selectedTargets.length < needed)
+      return showToast(`Select exactly ${needed} player(s).`);
+
+    if (phase.isWolfGroup) {
+      // Assign ALL selected players as wolf_pending
+      STATE.selectedTargets.forEach(id => {
+        let p = STATE.players.find(x => x.id === id);
+        p.role = 'wolf_pending'; p.originalRole = 'wolf_pending';
+        p.icon = '🐺?';
+      });
+    } else if (phase.isWolfRefinement) {
+      // Overwrite wolf_pending with the specific sub-role
+      STATE.selectedTargets.forEach(id => {
+        let p = STATE.players.find(x => x.id === id);
+        if (p.role !== 'wolf_pending')
+          return showToast('You must select a Wolf Team member (wolf_pending).');
+        p.role = phase.mapRole; p.originalRole = phase.mapRole;
+        p.icon = ROLES[p.role]?.emoji || '';
+      });
+    } else {
+      // Normal role assignment
+      STATE.selectedTargets.forEach(id => {
+        let p = STATE.players.find(x => x.id === id);
+        p.role = phase.mapRole; p.originalRole = phase.mapRole;
+        p.icon = ROLES[p.role]?.emoji || '';
+      });
+    }
+
+    STATE.selectedTargets = [];
+    // Advance phaseStep if this role has no power
+    let stepDef = PHASE_ORDER[phase.currentStep];
+    if (stepDef && !stepDef.power) {
+      STATE.phaseStep = phase.currentStep + 1;
+    }
+    // If role has power, stay — the power prompt shows next
+    saveState();
+    return;
+  }
+
+
+  if (phase.type === 'hunter_revenge') {
+    if (STATE.selectedTargets.length !== 1) return alert('Select 1 target to kill.');
+    killPlayer(STATE.selectedTargets[0], 'hunter revenge');
+    STATE.hunterPendingShot.shift();
+    STATE.selectedTargets = [];
+    checkGameOver();
+    saveState();
+    return;
+  }
+
+  if (phase.type === 'wolf_cub_revenge') {
+    if (STATE.selectedTargets.length !== 1) return alert('Select 1 target to kill.');
+    killPlayer(STATE.selectedTargets[0], 'wolf cub revenge');
+    STATE.wolfCubPendingShot.shift();
+    STATE.selectedTargets = [];
+    checkGameOver();
+    saveState();
+    return;
+  }
+
+  let r = phase.role;
+  let actionTaken = false;
+  let actor = STATE.players.find(p => p.role === r && !p.isDead);
+
+  if (r === 'cupid') {
+    if (STATE.selectedTargets.length !== 2) return showToast('Cupid must select exactly 2 players.');
+    if (actor) {
+      let p1 = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+      let p2 = STATE.players.find(x=>x.id===STATE.selectedTargets[1]);
+      p1.lovers.push(p2.id); p2.lovers.push(p1.id);
+      if (p1.role === 'tanner' || p2.role === 'tanner') { p1.tannerLover = true; p2.tannerLover = true; }
+      addHistory("system", `Cupid matched ${p1.name} and ${p2.name}.`);
+    }
+    actionTaken = true;
+  }
+  else if (r === 'bodyguard') {
+    if (STATE.selectedTargets.length === 1) {
+      if (actor) {
+        let targetId = STATE.selectedTargets[0];
+        if (STATE.lastBodyguardProtectedId && STATE.lastBodyguardProtectedId === targetId)
+          return showToast("Bodyguard can't protect the same person twice in a row.");
+        let p = STATE.players.find(x=>x.id===targetId); p.protected = true;
+        STATE.lastBodyguardProtectedId = targetId;
+      }
+      actionTaken = true;
+    } else {
+        return showToast('Select 1 player to protect.');
+    }
+  }
+  else if (r === 'dire_wolf') {
+    if (STATE.selectedTargets.length === 1) {
+      if (actor) {
+        let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+        if (p.role && ROLES[p.role].team === 'wolf') return showToast("Dire Wolf cannot choose another wolf!");
+        actor.direWolfTarget = p.id;
+      }
+      actionTaken = true;
+    } else {
+        return showToast('Select 1 lover for Dire Wolf.');
+    }
+  }
+  else if (r === 'spellcaster') {
+    if (STATE.selectedTargets.length === 1) {
+      if (actor) {
+        let targetId = STATE.selectedTargets[0];
+        if (STATE.lastSpellcasterSilencedId && STATE.lastSpellcasterSilencedId === targetId)
+          return showToast("Spellcaster can't silence the same person twice in a row.");
+        STATE.players.find(x=>x.id===targetId).silenced = true;
+        STATE.lastSpellcasterSilencedId = targetId;
+      }
+      actionTaken = true;
+    } else {
+        return showToast('Select 1 player to silence.');
+    }
+  }
+  else if (r === 'werewolves_group') {
+    if (STATE.selectedTargets.length === 1) {
+      // On Night 1, wolves are often still "wolf_pending" (not part of ROLES),
+      // so treat wolf_pending as a live wolf for the group action.
+      let anyWolfAlive = STATE.players.some(p =>
+        !p.isDead && (ROLES[p.role]?.team === 'wolf' || p.role === 'wolf_pending')
+      );
+      if (anyWolfAlive) {
+        let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+        const alphaAlive = STATE.players.some(x => x.role === 'alpha_wolf' && !x.isDead);
+        const doConvert = STATE.alphaWolfTriggered && !STATE.alphaWolfUsed && alphaAlive;
+
+        if (doConvert) {
+          // Conversion rules:
+          // - Only happens on the night after a wolf dies in the morning
+          // - Can't convert Cupid team (lovers) or Cupid itself
+          // - Fails if target is protected by Bodyguard (consumes the one-time conversion)
+          // - Consumes even if target is Cursed (still loses the effect)
+          if (!p || !p.role) {
+            // Unmapped is allowed (treated as Villager by rules), but ensure object exists
+          }
+          if (p && p.role && (ROLES[p.role]?.team === 'wolf' || p.role === 'wolf_pending')) return showToast('Must select a non-wolf player.');
+
+          STATE.alphaWolfUsed = true;
+          STATE.alphaWolfTriggered = false;
+
+          const blockedByCupid = p && (p.role === 'cupid' || (p.lovers && p.lovers.length > 0));
+          const blockedPrince = p && p.role === 'prince' && p.princeRevealed;
+
+          if (blockedByCupid) {
+            // If wolves try to convert Cupid/couple (including Cursed couple), they die instead.
+            if (p && p.protected) {
+              addHistoryT("wolf", "hist_alpha_convert_fail_cupid_kill_protected", { name: p.name });
+            } else if (p) {
+              addHistoryT("wolf", "hist_alpha_convert_hit_cupid_kill", { name: p.name });
+              STATE.nightDeaths.push({ id: p.id, source: 'wolf' });
+            }
+          } else if (blockedPrince) {
+            addHistoryT("wolf", "hist_alpha_convert_fail_revealed_prince", { name: p.name });
+          } else if (p && p.protected) {
+            addHistoryT("wolf", "hist_alpha_convert_fail_protected", { name: p.name });
+          } else if (p) {
+            p.alphaWolfConverted = true;
+            p.originalRole = p.originalRole || p.role;
+            p.role = 'werewolf';
+            p.icon = ROLES['werewolf'].emoji;
+            addHistoryT("wolf", "hist_alpha_convert_success", { name: p.name });
+          }
+        } else {
+          // Cursed conversion happens immediately on bite (unless protected beforehand, or Cupid/couple).
+          const isCupidTeam = p && (p.role === 'cupid' || (p.lovers && p.lovers.length > 0));
+          if (p && p.role === 'cursed' && !p.cursedBitten && !p.protected && !isCupidTeam) {
+            p.cursedBitten = true;
+            p.originalRole = p.originalRole || 'cursed';
+            p.role = 'werewolf';
+            p.icon = ROLES['werewolf'].emoji;
+            addHistoryT("wolf", "hist_cursed_turn", { name: p.name });
+          } else {
+            addHistoryT("wolf", "hist_wolves_targeted", { name: p.name });
+            // Hide Tough Guy bite from Witch the bite night
+            const hideFromWitch = (p && p.role === 'tough_guy' && !p.toughGuyBitten);
+            STATE.nightDeaths.push({id: p.id, source: 'wolf', hiddenFromWitch: !!hideFromWitch});
+          }
+        }
+      }
+      actionTaken = true;
+    } else {
+        return showToast('Select 1 victim.');
+    }
+  }
+  else if (r === 'witch') {
+    if (STATE.selectedTargets.length === 1 && STATE.witchPoisonUsed) {
+      return showToast("Witch's poison has already been used.");
+    }
+    if (STATE.selectedTargets.length === 1 && actor) {
+      let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+      STATE.nightDeaths.push({id: p.id, source: 'witch_poison'}); STATE.witchPoisonUsed = true;
+    }
+    actionTaken = true;
+  }
+  else if (r === 'seer') {
+    if (STATE.selectedTargets.length === 1) {
+      let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+      let isWolf = p.role && (ROLES[p.role].team === 'wolf' || p.role === 'lycan' || p.cursedBitten) && p.role !== 'wolf_man';
+      STATE.seerResult = { name: p.name, res: isWolf ? t('seer_wolf') : t('seer_human') };
+      STATE.selectedTargets = [];
+      saveState();
+      return;
+    } else if (STATE.seerResult) {
+       actionTaken = true;
+       STATE.seerResult = null;
+    } else {
+        return showToast('Select 1 player to inspect.');
+    }
+  }
+  else if (r === 'huntress') {
+    if (STATE.selectedTargets.length === 1) {
+      if (STATE.huntressUsed) return showToast("Huntress has already used her shot.");
+      if (actor) {
+        STATE.nightDeaths.push({id: STATE.selectedTargets[0], source: 'huntress'}); STATE.huntressUsed = true;
+      }
+      actionTaken = true;
+    } else {
+        actionTaken = true; // Can skip
+    }
+  }
+  else if (r === 'revealer') {
+    if (STATE.selectedTargets.length === 1) {
+      if (actor) {
+        let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+        if (p.role && ROLES[p.role].team === 'wolf') STATE.nightDeaths.push({id: p.id, source: 'revealer'});
+        else STATE.nightDeaths.push({id: actor.id, source: 'revealer_fail'});
+      }
+      actionTaken = true;
+    } else {
+        return showToast('Select 1 player to reveal.');
+    }
+  }
+  else if (r === 'bloody_mary_revenge') {
+    if (STATE.selectedTargets.length === 1) {
+      let bm = STATE.players.find(p => p.role === 'bloody_mary' && p.isDead);
+      if (bm) {
+        let target = STATE.players.find(x => x.id === STATE.selectedTargets[0]);
+        if (!target) return showToast('Invalid target.');
+
+        // Enforce revenge target type based on how Bloody Mary died
+        if (STATE.bloodyMaryRevenge?.mustTargetTeam === 'wolf') {
+          if (!(ROLES[target.role]?.team === 'wolf' || target.role === 'wolf_pending')) return showToast('Bloody Mary must kill a werewolf.');
+        } else {
+          if ((ROLES[target.role]?.team === 'wolf' || target.role === 'wolf_pending')) return showToast('Bloody Mary must kill a villager (non-wolf).');
+        }
+
+        STATE.nightDeaths.push({id: target.id, source: 'bloody_mary'});
+        STATE.bloodyMaryDone = true;
+        STATE.bloodyMaryRevenge = null;
+      }
+      actionTaken = true;
+    } else {
+        return showToast('Select 1 victim for revenge.');
+    }
+  }
+
+
+  if (actionTaken) {
+    // Advance past this power step
+    STATE.phaseStep = (phase.currentStep !== undefined ? phase.currentStep : STATE.phaseStep) + 1;
+    STATE.powerDone = false;
+    STATE.selectedTargets = [];
+    if (getCurrentPhaseData().type === 'end_night') processNightEnd();
+    saveState();
+  }
+}
+
+
+function checkGameOver() {
+  if (STATE.gameOver) return;
+  // Don't end the game during Night 1 mapping (unmapped players are expected then).
+  // After Night 1 sunrise, unmapped players are auto-assigned to Villager.
+  if (STATE.day === 0.5 && STATE.players.some(p => !p.role && p.role !== 'wolf_pending')) return;
+  
+  let wolves = STATE.players.filter(p => !p.isDead && (ROLES[p.role]?.team === 'wolf' || p.role === 'wolf_pending')).length;
+  let nonWolves = STATE.players.filter(p => !p.isDead && !(ROLES[p.role]?.team === 'wolf' || p.role === 'wolf_pending')).length;
+  
+  // 1. Tanner Win (Checked inside killPlayer/lynch already, but double check here)
+  let deadTanner = STATE.players.find(p => p.role === 'tanner' && p.isDead);
+  // Actually Tanner win is only if lynched. handled in lynch.
+  
+  // 2. Wolves win if they outnumber or equal non-wolves
+  if (wolves >= nonWolves && wolves > 0) { 
+    STATE.gameOver = true; 
+    STATE.winningTeam = "Werewolves"; 
+  }
+  // 3. Village win if all wolves are dead
+  else if (wolves === 0) { 
+    STATE.gameOver = true; 
+    STATE.winningTeam = "Village"; 
+  }
+
+  if (STATE.gameOver) {
+    addHistory("system", t('game_over', {team: STATE.winningTeam}));
+    if (!STATE.gameOverAnnounced) {
+      STATE.gameOverAnnounced = true;
+      showAlert("Game Over", t('game_over', {team: STATE.winningTeam}));
+    }
+    saveState();
+  }
+}
+
+function toggleTarget(id) {
+  let phase = getCurrentPhaseData();
+  if (phase.type === 'morning') {
+    STATE.selectedTargets = [id];
+  } else {
+    let r = phase.role;
+    let limit = (phase.mapping) ? phase.poolForMap : (r === 'cupid' ? 2 : 1);
+    let p = STATE.players.find(x => x.id === id);
+
+    if (phase.mapping) {
+      if (phase.isWolfRefinement) {
+        // Only wolf_pending players can be refined
+        if (p.role !== 'wolf_pending')
+          return showToast('Select a Wolf Team member (wolf_pending) to refine.');
+      } else if (phase.isWolfGroup) {
+        // No role yet allowed for the wolf group assignment
+        if (p.role)
+          return showToast('This player already has a role assigned.');
+      } else {
+        // Normal mapping: player must be unmapped
+        if (p.role)
+          return showToast('Cannot overwrite an existing role.');
+      }
+    }
+
+    let idx = STATE.selectedTargets.indexOf(id);
+    if (idx > -1) STATE.selectedTargets.splice(idx, 1);
+    else {
+      if (STATE.selectedTargets.length >= limit) STATE.selectedTargets.shift();
+      STATE.selectedTargets.push(id);
+    }
+  }
+  updateUI();
+}
+
+function healTarget(id) {
+  if (STATE.witchHealUsed) return;
+  let idx = STATE.nightDeaths.findIndex(d => d.id === id && d.source === 'wolf');
+  let p = STATE.players.find(x => x.id === id);
+  if (!p) return;
+
+  // Tough Guy: Witch can't save him from the bite (and can't even see it on the bite night).
+  // On later nights, the Witch may "heal" him, but it only wastes the potion.
+  if (p.role === 'tough_guy') {
+    pushUndo();
+    STATE.witchHealUsed = true;
+    addHistoryT("system", "hist_witch_heal_wasted", { name: p.name });
+    saveState();
+    return;
+  }
+
+  if (idx > -1) {
+    pushUndo();
+    STATE.nightDeaths.splice(idx, 1);
+    STATE.witchHealUsed = true;
+    saveState();
+  }
+}
+
+function toggleDeadManual(id) {
+  pushUndo();
+  let p = STATE.players.find(x=>x.id===id);
+  p.isDead = !p.isDead;
+  addHistoryT("system", "hist_manual_override", { name: p.name, state: p.isDead ? (STATE.lang === 'vi' ? 'Chết' : 'Dead') : (STATE.lang === 'vi' ? 'Sống' : 'Alive') });
+  saveState();
+}
+
+function addHistory(type, msg) { STATE.history.push({type, msg, time: new Date().toLocaleTimeString()}); }
+function addHistoryT(type, key, vars = {}) {
+  STATE.history.push({ type, key, vars, time: new Date().toLocaleTimeString() });
+}
+
+// --- UI UPDATES ---
+function updateUI() {
+  updateTranslations(); updateRegistry(); updatePanel(); updateHistory(); updateStrength();
+}
+
+function updateTranslations() {
+  document.querySelectorAll('.i18n').forEach(el => { let k = el.getAttribute('data-i18n'); if (I18N[STATE.lang][k]) el.innerText = I18N[STATE.lang][k]; });
+  document.querySelectorAll('.i18n-ph').forEach(el => { let k = el.getAttribute('data-i18n'); if (I18N[STATE.lang][k]) el.placeholder = I18N[STATE.lang][k]; });
+}
+
+function updateRegistry() {
+  // Extract all names strictly from presets to knownPlayers dynamically
+  STATE.knownPlayers = [];
+  PRESETS.forEach(p => {
+    if (p.name && !STATE.knownPlayers.includes(p.name)) {
+      STATE.knownPlayers.push(p.name);
+    }
+    if (p.names) {
+      p.names.forEach(n => {
+        if (!STATE.knownPlayers.includes(n)) {
+          STATE.knownPlayers.push(n);
+        }
+      });
+    }
+  });
+
+  // Presets
+  let sel = document.getElementById('preset-select');
+  let oldVal = sel.value;
+  sel.innerHTML = '';
+  PRESETS.forEach((p, i) => sel.innerHTML += `<option value="${i}">${p.name}</option>`);
+  if (oldVal && sel.querySelector(`option[value="${oldVal}"]`)) {
+    sel.value = oldVal;
+  }
+  
+  // Players
+  let plist = document.getElementById('setup-players-list');
+  plist.innerHTML = '';
+  STATE.setupNames.forEach((n, i) => {
+    plist.innerHTML += `<div class="setup-item"><span>${n}</span><button class="danger small" onclick="removeSetupPlayer(${i})">X</button></div>`;
+  });
+  document.getElementById('player-count').innerText = STATE.setupNames.length;
+  
+  // Pool
+  let poolVillage = document.getElementById('setup-pool-village');
+  let poolNeutral = document.getElementById('setup-pool-neutral');
+  let poolWolf = document.getElementById('setup-pool-wolf');
+  let poolCount = 0;
+
+  let villageHtml = `<div style="background:rgba(187, 134, 252, 0.1); padding:5px 10px; font-weight:bold; color:var(--village); position: sticky; top: 0; z-index: 1; border-radius: 4px; margin-bottom: 5px;">Good (Village)</div>`;
+  let neutralHtml = `<div style="background:rgba(3, 218, 198, 0.1); padding:5px 10px; font-weight:bold; color:var(--neutral); position: sticky; top: 0; z-index: 1; border-radius: 4px; margin-bottom: 5px;">Neutral</div>`;
+  let wolfHtml = `<div style="background:rgba(255, 68, 68, 0.1); padding:5px 10px; font-weight:bold; color:var(--wolf); position: sticky; top: 0; z-index: 1; border-radius: 4px; margin-bottom: 5px;">Evil (Wolf)</div>`;
+
+  for (let k in ROLES) {
+    let c = STATE.setupPool[k] || 0;
+    poolCount += c;
+    let itemHtml = `<div class="setup-item"><span>${getRoleName(k)} <small style="opacity:0.5">(${ROLES[k].score > 0 ? '+'+ROLES[k].score : ROLES[k].score})</small></span>
+      <div class="counter-controls"><button class="counter-btn" onclick="modifyPool('${k}', -1)">-</button><span>${c}</span><button class="counter-btn outline" onclick="modifyPool('${k}', 1)">+</button></div></div>`;
+    
+    if (ROLES[k].team === 'village') villageHtml += itemHtml;
+    else if (ROLES[k].team === 'neutral') neutralHtml += itemHtml;
+    else if (ROLES[k].team === 'wolf') wolfHtml += itemHtml;
+  }
+
+  poolVillage.innerHTML = villageHtml;
+  poolNeutral.innerHTML = neutralHtml;
+  poolWolf.innerHTML = wolfHtml;
+  document.getElementById('pool-count').innerText = poolCount;
+  
+  document.getElementById('btn-start-game').style.display = STATE.gameStarted ? 'none' : 'block';
+  document.getElementById('btn-end-game').style.display = STATE.gameStarted ? 'block' : 'none';
+}
+
+function updatePanel() {
+  if (!STATE.gameStarted) {
+    document.getElementById('wake-up-quote').innerText = "Game not started.";
+    document.getElementById('panel-grid').innerHTML = '';
+    return;
+  }
+  
+  if (STATE.gameOver) {
+    document.getElementById('wake-up-quote').innerText = t('game_over', {team: STATE.winningTeam});
+    document.getElementById('morning-buttons').style.display = 'none';
+    document.getElementById('btn-skip').style.display = 'none';
+    document.getElementById('btn-confirm').style.display = 'none';
+    document.getElementById('mapping-banner').classList.add('d-none');
+    renderGrid(true); return;
+  }
+
+  let phase = getCurrentPhaseData();
+  let quoteEl = document.getElementById('wake-up-quote');
+  let banner = document.getElementById('mapping-banner');
+  let confirmBtn = document.getElementById('btn-confirm');
+  
+  document.getElementById('morning-buttons').style.display = phase.type === 'morning' ? 'flex' : 'none';
+  
+  let instrEl = document.getElementById('action-instruction');
+  if (phase.type === 'night' || phase.type === 'hunter_revenge' || phase.type === 'wolf_cub_revenge') {
+    instrEl.style.display = 'block';
+    instrEl.innerText = phase.instruction || "";
+  } else {
+    instrEl.style.display = 'none';
+  }
+
+  let canSkip = (phase.type === 'night' && !phase.mapping && !['spellcaster', 'cupid', 'bloody_mary_revenge'].includes(phase.role));
+  document.getElementById('btn-skip').style.display = canSkip ? 'block' : 'none';
+  confirmBtn.style.display = (phase.type === 'night' || phase.type === 'hunter_revenge' || phase.type === 'wolf_cub_revenge') ? 'block' : 'none';
+
+  if (phase.type === 'morning') {
+    banner.classList.add('d-none');
+    // Display all players added to deathsThisNight during the last night cycle
+    let victims = STATE.deathsThisNight;
+    let nameStr = victims && victims.length > 0 ? victims.map(v => "- " + v).join("<br>") : "None";
+    quoteEl.innerHTML = `<div>${t('sunrise_intro')}</div><div style="margin-top:5px; color:var(--danger);">${nameStr}</div>`;
+  } else {
+    if (phase.mapping) {
+      banner.classList.remove('d-none');
+      banner.innerText = t('map_role', {role: phase.displayName || getRoleName(phase.mapRole), count: phase.poolForMap});
+      quoteEl.innerText = t('wake_gen', {role: phase.displayName || getRoleName(phase.role)});
+      confirmBtn.innerText = t('map_btn');
+    } else {
+      banner.classList.add('d-none');
+      let wakeKey = 'wake_' + phase.role;
+      let wakeText = t(wakeKey) || t('wake_gen', {role: getRoleName(phase.role)});
+      quoteEl.innerText = wakeText;
+      if (phase.role === 'witch') {
+        // Witch sees only actual imminent deaths for this night (not protected, not hidden).
+        // Tough Guy bite is hidden on the bite night; later nights she may see he's doomed, but healing won't work.
+        let victims = STATE.nightDeaths.filter(d => {
+          let pp = STATE.players.find(p=>p.id===d.id);
+          if (!pp) return false;
+          if (pp.protected) return false;
+          if (d.hiddenFromWitch) return false;
+          return true;
+        });
+
+        // Add Tough Guy "doomed" display on the night AFTER he was bitten
+        let doomedToughGuys = STATE.players.filter(p => p.role === 'tough_guy' && p.toughGuyBitten && (Math.floor(STATE.day) + 1) === p.toughGuyBitten);
+        let names = [
+          ...victims.map(d => STATE.players.find(x=>x.id===d.id)?.name),
+          ...doomedToughGuys.map(p => p.name)
+        ].filter(Boolean).join(", ");
+        quoteEl.innerHTML = `<div>${t('wake_witch', {names: names || "no one"})}</div>`;
+        quoteEl.innerHTML += `<div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
+          <div class="potion-icon ${STATE.witchHealUsed ? 'used' : ''}" title="Heal Potion">🧪</div>
+          <div class="potion-icon ${STATE.witchPoisonUsed ? 'used' : ''}" title="Poison Potion">💀</div>
+        </div>`;
+      }
+      if ((phase.role === 'seer' || phase.role === 'apprentice_seer') && STATE.seerResult) {
+        quoteEl.innerHTML += `<div class="seer-result-box">${STATE.seerResult.name} is: <span>${STATE.seerResult.res}</span></div>`;
+      }
+      if (phase.type === 'hunter_revenge') {
+        quoteEl.innerText = `Hunter (${phase.name}), take your final shot!`;
+      }
+      if (phase.type === 'wolf_cub_revenge') {
+        quoteEl.innerText = `Wolf Cub (${phase.name}), take someone with you!`;
+      }
+    }
+  }
+
+  // Do NOT auto-resolve end_night here.
+  // Auto-advancing prevents Undo from working across night→day transitions.
+
+  renderGrid(false);
+}
+
+    function renderGrid(revealAll) {
+      const grid = document.getElementById('panel-grid');
+      grid.innerHTML = '';
+      let phase = getCurrentPhaseData();
+
+      STATE.players.forEach(p => {
+        let btn = document.createElement('div');
+        btn.className = 'grid-btn';
+        if (p.isDead) btn.classList.add('dead');
+        if (STATE.selectedTargets.includes(p.id)) btn.classList.add('selected');
+
+        // Dim players who are not valid for current selection
+        if (phase.mapping) {
+          if (phase.isWolfRefinement && p.role !== 'wolf_pending') {
+            btn.style.opacity = '0.3';
+          } else if (phase.isWolfGroup && p.role) {
+            btn.style.opacity = '0.3';
+          } else if (!phase.isWolfRefinement && !phase.isWolfGroup && p.role) {
+            btn.style.opacity = '0.3';
+          }
+        }
+
+        // Role styling
+        let roleClass = 'role-neutral';
+        if (p.role) {
+          if (p.role === 'wolf_pending')              roleClass = 'role-wolf';
+          else if (ROLES[p.role]?.team === 'village') roleClass = 'role-village';
+          else if (ROLES[p.role]?.team === 'wolf')    roleClass = 'role-wolf';
+        }
+
+        let nameHtml = `<strong>${p.name}</strong>`;
+        let statusHtml = (p.protected ? '🛡️' : '') + (p.silenced ? '🤫' : '') + (p.princeRevealed ? '👑' : '') + (p.lovers && p.lovers.length > 0 ? '❤️' : '');
+        // Dire Wolf lover icon
+        let dwLover = STATE.players.find(dw => dw.role === 'dire_wolf' && dw.direWolfTarget === p.id);
+        if (dwLover) statusHtml += '🖤';
+
+        let healBtn = '';
+        if (phase.role === 'witch' && !phase.mapping) {
+          let isVictim = STATE.nightDeaths.find(d => d.id === p.id && !p.protected && !d.hiddenFromWitch);
+          // Show heal button only for visible victims; Tough Guy "heal" is allowed but only wastes (handled in healTarget)
+          if ((isVictim || (p.role === 'tough_guy' && p.toughGuyBitten && (Math.floor(STATE.day) + 1) === p.toughGuyBitten)) && !STATE.witchHealUsed)
+            healBtn += `<button style="padding:2px 4px;font-size:9px;border-radius:4px;background:var(--success);color:black;border:none;margin-right:2px" onclick="event.stopPropagation();healTarget('${p.id}')">Heal</button>`;
+          if (!STATE.witchPoisonUsed)
+            healBtn += `<button style="padding:2px 4px;font-size:9px;border-radius:4px;background:var(--danger);color:white;border:none" onclick="event.stopPropagation();poisonTarget('${p.id}')">Poison</button>`;
+        }
+
+        let roleName = p.role === 'wolf_pending' ? 'Wolf Team (?)' : (p.role ? getRoleName(p.role) : 'Unmapped');
+        let roleHtml = `<div class="role-tag ${roleClass}">${roleName}</div>`;
+        let roleEmoji = p.role === 'wolf_pending' ? '🐺' : (p.role && ROLES[p.role] ? ROLES[p.role].emoji : '❓');
+        // Huntress: show a crossbow indicator that darkens once shot is used
+        if (p.role === 'huntress') roleEmoji = '🏹';
+
+        btn.innerHTML = `
+          <div style="font-size:20px; opacity:${(p.role === 'huntress' && STATE.huntressUsed) ? '0.25' : '1'}">${p.isDead ? '💀' : roleEmoji}</div>
+          ${nameHtml}
+          <div>${statusHtml}</div>
+          ${roleHtml}
+          <div class="mt-1">${healBtn}</div>
+        `;
+        btn.onclick = () => toggleTarget(p.id);
+        grid.appendChild(btn);
+      });
+    }
+
+function updateHistory() {
+  const log = document.getElementById('history-log');
+  log.innerHTML = '';
+  [...STATE.history].reverse().forEach(h => {
+    let div = document.createElement('div');
+    div.className = `history-item ${h.type}`;
+    const rendered = h.key ? (t(h.key, h.vars || {}) || h.key) : h.msg;
+    div.innerText = `[${h.time}] ${rendered}`;
+    log.appendChild(div);
+  });
+}
+
+function updateStrength() {
+  let total = 0;
+  if (!STATE.gameStarted) {
+    for (let k in STATE.setupPool) {
+      let c = STATE.setupPool[k];
+      if (c > 0 && ROLES[k]) {
+        total += (ROLES[k].score * c);
+      }
+    }
+  } else {
+    STATE.players.forEach(p => {
+      if (!p.isDead && p.role && ROLES[p.role]) {
+        total += ROLES[p.role].score;
+      }
+    });
+  }
+  let el = document.getElementById('strength-value');
+  el.innerText = total > 0 ? "+" + total : total;
+  el.className = 'strength ' + (total > 0 ? 'positive' : (total < 0 ? 'negative' : ''));
+}
+
+init();
+</script>
+</body>
+</html>

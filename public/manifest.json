@@ -1,0 +1,16 @@
+{
+  "name": "Workspace Notion Clone",
+  "short_name": "Workspace",
+  "description": "Full-stack Notion clone with habit tracker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#1e1e1e",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
