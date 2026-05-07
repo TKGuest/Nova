@@ -52,7 +52,7 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
   // Sync tempPosition with incoming coverImage prop
   useEffect(() => {
     if (coverImage?.position !== undefined && !isRepositioning) {
-      setTempPosition(coverImage.position);
+      setTempPosition(coverImage.position ?? 50);
     }
   }, [coverImage?.position, isRepositioning]);
 
