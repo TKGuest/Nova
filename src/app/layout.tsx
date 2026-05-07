@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/auth/AuthProvider';
@@ -16,6 +16,12 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Workspace',
   description: 'Notion cloned workspace with offline support and syncing',
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -35,7 +41,7 @@ export default function RootLayout({
                 main={
                   <>
                     <Header />
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
                       {children}
                     </div>
                     <SidePeek />
