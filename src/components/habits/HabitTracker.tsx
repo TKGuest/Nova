@@ -204,7 +204,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       <div className={`w-full flex flex-col bg-[#0a0a0a] ${isPeek ? 'flex-1 min-h-0 overflow-hidden py-4 px-6' : 'py-4 px-4 md:px-10'}`}>
         {/* Header - Hidden in focused peek mode to save space */}
         {!(isPeek && sidePeekRecordId) && (
-          <div className={`flex items-center justify-between mb-6 pb-4 border-b border-[#1a1a1a] ${isPeek ? 'flex-wrap gap-4' : ''}`}>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-[#1a1a1a]">
           <div className="flex items-center gap-2">
             <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-2.5 px-4 py-2.5 bg-[#2383e2] text-white rounded-md text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10"><Plus size={15}/> New</button>
             <div className="relative">
