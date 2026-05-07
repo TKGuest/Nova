@@ -30,10 +30,12 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
-  overflow: hidden;
-  overflow-x: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: 100dvh;
   width: 100%;
-  position: relative;
-  touch-action: none;
+  -webkit-overflow-scrolling: touch;
 }
