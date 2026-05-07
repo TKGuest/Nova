@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { BlockType } from '@/types';
+import { BlockType } from '../../types';
 import { Type, Heading1, Heading2, Heading3, Heading4, List, ListOrdered, CheckSquare, ChevronRight, File, MessageSquare, Quote, Table as TableIcon, Minus, Link as LinkIcon, Image, Video, Mic, Code, Paperclip } from 'lucide-react';
 
 interface SlashCommandMenuProps {
