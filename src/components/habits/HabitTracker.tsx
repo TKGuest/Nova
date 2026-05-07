@@ -206,13 +206,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         {!(isPeek && sidePeekRecordId) && (
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-[#1a1a1a]">
           <div className="flex items-center gap-2">
-            <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-2.5 px-4 py-2.5 bg-[#2383e2] text-white rounded-md text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10"><Plus size={15}/> New</button>
+            <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 bg-[#2383e2] text-white rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10 shrink-0"><Plus size={14}/> New</button>
             <div className="relative">
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-md text-[11px] font-black uppercase tracking-widest transition-all ${isSettingsOpen ? 'bg-[#222] text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isSettingsOpen ? 'bg-[#222] text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
               >
-                <Settings size={15}/> Settings
+                <Settings size={14}/> Settings
               </button>
               {isSettingsOpen && (
                 <div onClick={(e) => e.stopPropagation()} className="absolute top-full left-0 mt-2 z-[100] w-64 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg shadow-2xl p-4 space-y-6 text-left">
@@ -240,9 +240,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               )}
             </div>
           </div>
-          <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-            <button onClick={() => setViewMode('table')} className={`px-3.5 py-2 rounded flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter ${viewMode === 'table' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><TableIcon size={13}/> Table</button>
-            <button onClick={() => setViewMode('card')} className={`px-3.5 py-2 rounded flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter ${viewMode === 'card' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><LayoutGrid size={13}/> Card</button>
+          <div className="flex bg-[#111] rounded-md p-0.5 md:p-1 border border-[#1a1a1a] shrink-0">
+            <button onClick={() => setViewMode('table')} className={`px-2 md:px-3.5 py-1.5 md:py-2 rounded flex items-center gap-1 md:gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-tighter ${viewMode === 'table' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><TableIcon size={12}/> Table</button>
+            <button onClick={() => setViewMode('card')} className={`px-2 md:px-3.5 py-1.5 md:py-2 rounded flex items-center gap-1 md:gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-tighter ${viewMode === 'card' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><LayoutGrid size={12}/> Card</button>
           </div>
         </div>
         )}
