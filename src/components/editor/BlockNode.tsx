@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Block, BlockType } from '@/types';
+import { Block, BlockType } from '../../types';
 import { GripVertical, ChevronRight, File as FileIcon, FileImage, FileVideo, FileAudio, FileCode, Paperclip, Quote } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { clsx, type ClassValue } from 'clsx';
