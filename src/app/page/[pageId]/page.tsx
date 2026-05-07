@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { PageModel } from '@/types';
+import { PageModel } from '../../../types';
 import { WordEditor } from '@/components/editor/WordEditor';
 import { HabitTracker } from '@/components/habits/HabitTracker';
 import { Loader2 } from 'lucide-react';
