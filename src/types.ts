@@ -1,3 +1,5 @@
+'use client';
+
 export type BlockType = 
   | 'text' 
   | 'h1' | 'h2' | 'h3' | 'h4' 
