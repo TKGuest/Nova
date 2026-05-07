@@ -268,7 +268,7 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
             </div>
           )}
           {!isRepositioning && editable && !isUploading && (
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-end p-4 gap-2">
+            <div className="absolute inset-0 bg-black/10 opacity-100 md:opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-end p-4 gap-2">
               <button 
                 onClick={() => startReposition()}
                 className="px-5 py-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[12px] font-black uppercase tracking-widest text-white hover:bg-black/80 transition-all flex items-center gap-2"
@@ -292,7 +292,7 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
         </>
       ) : (
         editable && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cover:opacity-100 transition-opacity">
+          <div className="absolute inset-0 flex items-center justify-center opacity-100 md:opacity-0 group-hover/cover:opacity-100 transition-opacity">
             <button 
               onClick={() => setIsOpen(true)}
               className="flex items-center gap-3 px-6 py-3 bg-white/5 border border-white/10 rounded-lg text-[13px] font-black uppercase tracking-widest text-gray-400 hover:text-white hover:bg-white/10 transition-all"
