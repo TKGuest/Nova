@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { format, addDays, startOfDay, differenceInSeconds } from 'date-fns';
-import { Clock, Globe, Zap, Settings2 } from 'lucide-react';
+import { Clock, Globe, Zap, Settings2, ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export function Header() {
   const { settings } = useWorkspace();
@@ -45,6 +46,10 @@ export function Header() {
   return (
     <header className="h-14 border-b border-[#2d2d2d] bg-[#1e1e1e] flex items-center justify-between px-6 shrink-0 select-none z-50 relative">
       <div className="flex items-center gap-4">
+        {/* Mobile Back Button */}
+        <Link href="/" className="md:hidden flex items-center gap-1 text-gray-400 hover:text-gray-200 bg-[#252526] px-2 py-1.5 rounded-md border border-[#3e3e3e]">
+          <ChevronLeft size={18} />
+        </Link>
       </div>
 
       <div className="flex items-center gap-6">

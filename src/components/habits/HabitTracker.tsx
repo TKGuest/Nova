@@ -347,7 +347,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                     <div className="flex-1 h-[1px] bg-[#1a1a1a]" />
                   </div>
                   {!collapsedWeeks.has(key) && (
-                    <div className={`grid gap-2 w-full ${isPeek ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-7'}`}>
+                    <div className={`grid gap-2 w-full ${isPeek ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7'}`}>
                       {group.items.map(record => {
                         const dateObj = parseISO(record.date);
                         const habits = masterTasks.filter(t => t.type === 'habit');
@@ -424,8 +424,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-[#1a1a1a] overflow-hidden bg-[#111] w-full">
-              <table className="w-full text-left border-collapse">
+            <div className="rounded-lg border border-[#1a1a1a] overflow-x-auto custom-scrollbar bg-[#111] w-full">
+              <table className="w-full text-left border-collapse min-w-[800px] md:min-w-0">
                 <thead>
                   <tr className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
                     <th className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-600 border-r border-[#1a1a1a] w-[180px]">Date Record</th>

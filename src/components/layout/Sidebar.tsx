@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, query, orderBy, deleteDoc, updateDoc } from 'firebase/firestore';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Plus, FileText, CalendarCheck2, MoreHorizontal, Star, Link2, Copy, Edit2, CornerUpRight, Trash2, ExternalLink, Columns, Settings, Calendar } from 'lucide-react';
+import { Plus, FileText, CalendarCheck2, MoreHorizontal, Star, Link2, Copy, Edit2, CornerUpRight, Trash2, ExternalLink, Columns, Settings, Calendar, Search, Sparkles } from 'lucide-react';
 import { UserProfile } from '@/components/auth/UserProfile';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useNotification } from '@/context/NotificationContext';
@@ -157,8 +157,9 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="w-64 border-r border-[#2d2d2d] bg-[#252526] flex flex-col shrink-0 justify-between h-full relative">
-        <div className="flex flex-col h-full overflow-hidden">
+      <aside className="w-full md:w-64 border-r border-[#2d2d2d] bg-[#121212] md:bg-[#252526] flex flex-col shrink-0 justify-between h-full relative">
+        {/* DESKTOP VIEW */}
+        <div className="hidden md:flex flex-col h-full overflow-hidden">
           <div className="p-4 border-b border-[#2d2d2d] flex items-center justify-between shrink-0">
             <h1 className="font-semibold text-sm select-none truncate opacity-80">Workspace Workspace</h1>
           </div>
@@ -274,9 +275,89 @@ export function Sidebar() {
               </button>
             </div>
           </div>
-          <div className="border-t border-[#2d2d2d] bg-[#252526]">
-            <UserProfile />
+            <div className="border-t border-[#2d2d2d] bg-[#252526]">
+              <UserProfile />
+            </div>
           </div>
+
+        {/* MOBILE VIEW */}
+        <div className="flex md:hidden flex-col h-full overflow-hidden bg-[#121212]">
+           <div className="pt-12 p-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 bg-[#2a2a2b] rounded-full px-5 py-2">
+                 <span className="font-bold text-[15px] text-white">Home</span>
+              </div>
+              <div className="flex items-center gap-5 text-gray-400">
+                 <button><Calendar size={22} /></button>
+                 <button><MoreHorizontal size={22} /></button>
+              </div>
+           </div>
+           <div className="flex-1 overflow-y-auto px-4 mt-2">
+              {/* RECENTS CAROUSEL */}
+              <div className="mb-8">
+                 <div className="flex items-center justify-between mb-4 text-gray-400 font-semibold text-[15px]">
+                   <span>Recents</span>
+                   <ChevronDown size={16} />
+                 </div>
+                 <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x -mx-4 px-4">
+                   {pages.map(page => (
+                     <Link 
+                       key={`mobile-recent-${page.id}`} 
+                       href={`/page/${page.id}`}
+                       className="shrink-0 w-[140px] h-[150px] bg-[#1e1e1e] rounded-xl overflow-hidden border border-[#2d2d2d] flex flex-col snap-start shadow-sm"
+                     >
+                       <div className="h-[90px] w-full bg-[#2a2a2b] relative overflow-hidden border-b border-[#2d2d2d]">
+                          {page.coverImage && (
+                             <img src={page.coverImage.url} className="w-full h-full object-cover" style={{ objectPosition: `50% ${page.coverImage.position || 50}%` }} alt="" />
+                          )}
+                       </div>
+                       <div className="p-3 flex items-center gap-2 flex-1 bg-[#222]">
+                          {page.type === 'note' ? <FileText size={18} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={18} className="text-gray-400 shrink-0" />}
+                          <span className="font-bold text-[13px] text-gray-200 truncate">{page.title}</span>
+                       </div>
+                     </Link>
+                   ))}
+                 </div>
+              </div>
+              {/* PRIVATE LIST */}
+              <div className="mb-4">
+                 <div className="flex items-center justify-between mb-2 text-gray-400 font-semibold text-[15px]">
+                   <span>Private</span>
+                   <MoreHorizontal size={16} />
+                 </div>
+                 <div className="flex flex-col gap-1">
+                    {pages.map(page => (
+                       <Link 
+                         key={`mobile-private-${page.id}`} 
+                         href={`/page/${page.id}`}
+                         className="flex items-center gap-4 py-3.5 px-2 active:bg-[#2a2a2b] rounded-xl transition-colors"
+                       >
+                         {page.type === 'note' ? <FileText size={22} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={22} className="text-[#51b151] shrink-0" />}
+                         <span className="font-bold text-[16px] text-gray-100 flex-1 truncate">{page.title}</span>
+                       </Link>
+                    ))}
+                 </div>
+              </div>
+           </div>
+           {/* BOTTOM TAB BAR */}
+           <div className="border-t border-[#2d2d2d] bg-[#161616] pt-3 pb-6 flex justify-between items-center px-8 relative">
+              <button className="flex flex-col items-center gap-1.5 text-gray-400">
+                <Search size={22} />
+              </button>
+              <button className="flex flex-col items-center gap-1.5 text-gray-400">
+                <Sparkles size={22} />
+              </button>
+              <div className="w-12 h-12"></div> {/* Spacer for floating FAB */}
+           </div>
+           
+           {/* Floating FAB */}
+           <div className="absolute bottom-4 right-6 flex flex-col gap-3">
+              <button onClick={() => setSettingsOpen(true)} className="bg-[#2a2a2b] p-3.5 rounded-full text-white shadow-xl flex items-center justify-center">
+                 <Settings size={24} />
+              </button>
+              <button onClick={() => createPage('note')} className="bg-[#2383e2] p-3.5 rounded-full text-white shadow-xl flex items-center justify-center">
+                 <Edit2 size={24} />
+              </button>
+           </div>
         </div>
       </aside>
 
@@ -341,4 +422,8 @@ export function Sidebar() {
 // Minimal missing lucide-react chevron right fallback
 const ChevronRight = ({ size, className }: { size: number, className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>
+);
+
+const ChevronDown = ({ size, className }: { size: number, className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m6 9 6 6 6-6"/></svg>
 );
