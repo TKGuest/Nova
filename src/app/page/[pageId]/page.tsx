@@ -57,7 +57,7 @@ export default function DynamicPage() {
     <div className="flex flex-col h-full overflow-hidden bg-[#1e1e1e]">
       <div className="flex-1 w-full overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
         <CoverImage pageId={pageId} coverImage={pageMeta.coverImage} />
-        <div className="max-w-5xl mx-auto px-6 md:px-20 py-10">
+        <div className="max-w-7xl mx-auto px-6 md:px-20 py-10">
           <h1 className="text-4xl font-bold text-foreground mb-8 outline-none break-words overflow-hidden" contentEditable suppressContentEditableWarning>
             {pageMeta.title}
           </h1>
