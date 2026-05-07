@@ -80,8 +80,10 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
   };
 
   const updateCover = async (url: string, type: 'preset' | 'upload', position: number = 50) => {
-    if (!user) return;
+    if (!user || !url) return;
     setOptimisticCover(url); 
+    setIsOpen(false); // Close immediately for better UX
+    
     try {
       const field = isDefault ? 'defaultRecordCover' : 'coverImage';
       const docPath = recordId 
@@ -89,14 +91,13 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
         : doc(db, 'users', user.uid, 'pages', pageId);
         
       await updateDoc(docPath, {
-        [field]: { url, type, position }
+        [field]: { url, type, position: position ?? 50 }
       });
       showToast(isDefault ? 'Default cover updated' : 'Cover updated');
-      setIsOpen(false);
     } catch (error) {
       console.error('Update cover error:', error);
       setOptimisticCover(null);
-      showToast('Failed to save to database', 'error');
+      showToast('Failed to update database', 'error');
     }
   };
 
@@ -104,7 +105,6 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Check file size (limit to 5MB for fast local dev)
     if (file.size > 5 * 1024 * 1024) {
       showToast('File too large (max 5MB)', 'error');
       return;
@@ -119,12 +119,10 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
     try {
       const storagePath = `users/${user.uid}/covers/${pageId}_${Date.now()}`;
       const storageRef = ref(storage, storagePath);
-      console.log('Attempting upload to:', storageRef.fullPath);
       
-      const uploadResult = await uploadBytes(storageRef, file);
+      await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       
-      // Save to user's gallery
       await addDoc(collection(db, 'users', user.uid, 'saved_covers'), {
         url,
         storagePath,
@@ -133,15 +131,9 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
 
       await updateCover(url, 'upload');
     } catch (error: any) {
-      console.error('Firebase Storage Error:', error);
+      console.error('Upload error:', error);
       setOptimisticCover(null);
-      if (error.code === 'storage/unauthorized') {
-        showToast('Storage Permission Denied', 'error');
-      } else if (error.code === 'storage/retry-limit-exceeded') {
-        showToast('Connection timed out (Check CORS settings)', 'error');
-      } else {
-        showToast('Upload failed: ' + (error.message || 'Unknown error'), 'error');
-      }
+      showToast('Upload failed: ' + (error.message || 'Check storage rules'), 'error');
     } finally {
       setIsUploading(false);
     }
