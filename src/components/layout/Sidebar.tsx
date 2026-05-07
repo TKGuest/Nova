@@ -11,24 +11,7 @@ import { UserProfile } from '@/components/auth/UserProfile';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useNotification } from '@/context/NotificationContext';
 
-export interface PageModel {
-  id: string;
-  title: string;
-  type: 'note' | 'habit';
-  createdAt: number;
-  isFavorite?: boolean;
-  content?: string;
-  coverImage?: {
-    url: string;
-    type: 'preset' | 'upload';
-    position?: number;
-  };
-  defaultRecordCover?: {
-    url: string;
-    type: 'preset' | 'upload';
-    position?: number;
-  };
-}
+import { PageModel } from '@/types';
 
 export function Sidebar() {
   const { user } = useAuth();
