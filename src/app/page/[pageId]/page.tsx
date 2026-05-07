@@ -25,7 +25,7 @@ export default function DynamicPage() {
     const docRef = doc(db, 'users', user.uid, 'pages', pageId);
     const unsub = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        setPageMeta(docSnap.data() as PageModel);
+        setPageMeta({ id: docSnap.id, ...docSnap.data() } as PageModel);
       }
       setLoading(false);
     }, (err) => {

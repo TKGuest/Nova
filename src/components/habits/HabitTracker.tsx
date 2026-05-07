@@ -46,7 +46,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set());
   const [counterFormat, setCounterFormat] = useState<'fraction' | 'percent'>('fraction');
   const [textSize, setTextSize] = useState<TextSize>('small');
-  const [pageMeta, setPageMeta] = useState<any>(null);
+  const [pageMeta, setPageMeta] = useState<PageModel | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<{ initialDate?: Date } | null>(null);
@@ -96,7 +96,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       setRecords(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as PageRecord)));
     });
     const unsubPage = onSnapshot(doc(db, 'users', user.uid, 'pages', pageId), (snapshot) => {
-      if (snapshot.exists()) setPageMeta(snapshot.data());
+      if (snapshot.exists()) setPageMeta({ id: snapshot.id, ...snapshot.data() } as PageModel);
     });
     const handleOpenManager = () => setIsPropertyModalOpen(true);
     window.addEventListener('open-task-manager', handleOpenManager);
