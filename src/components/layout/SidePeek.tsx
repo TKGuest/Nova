@@ -35,11 +35,13 @@ export function SidePeek() {
       setPosition({ x: 0, y: 0 });
       setSize({ width: window.innerWidth, height: window.innerHeight });
     } else {
+      const width = Math.min(window.innerWidth * 0.8, 900);
+      const height = window.innerHeight * 0.85;
       setPosition({
-        x: Math.max(50, window.innerWidth / 2 - 350),
-        y: Math.max(50, window.innerHeight / 2 - 400)
+        x: Math.max(50, (window.innerWidth - width) / 2),
+        y: Math.max(50, (window.innerHeight - height) / 2)
       });
-      setSize({ width: 700, height: 800 });
+      setSize({ width, height });
     }
   }, [sidePeekPageId, isMobile]);
 
