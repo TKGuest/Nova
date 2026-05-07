@@ -104,7 +104,7 @@ export function WordEditor({ pageId }: WordEditorProps) {
     <div className="flex flex-col h-full bg-[#1e1e1e] tiptap-editor">
       <WordToolbar editor={editor} />
       
-      <div className="flex-1 overflow-y-auto px-20 py-10">
+      <div className="flex-1 overflow-y-auto px-6 md:px-20 py-10">
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }} className="flex bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg shadow-xl overflow-hidden p-1 gap-1">
           <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-[#3a3a3a] ${editor.isActive('bold') ? 'text-blue-400 bg-[#3a3a3a]' : 'text-gray-300'}`}><Bold size={14}/></button>
           <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1.5 rounded hover:bg-[#3a3a3a] ${editor.isActive('italic') ? 'text-blue-400 bg-[#3a3a3a]' : 'text-gray-300'}`}><Italic size={14}/></button>
@@ -114,7 +114,6 @@ export function WordEditor({ pageId }: WordEditorProps) {
           <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={`p-1.5 rounded hover:bg-[#3a3a3a] ${editor.isActive({ textAlign: 'center' }) ? 'text-blue-400 bg-[#3a3a3a]' : 'text-gray-300'}`}><AlignCenter size={14}/></button>
           <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={`p-1.5 rounded hover:bg-[#3a3a3a] ${editor.isActive({ textAlign: 'right' }) ? 'text-blue-400 bg-[#3a3a3a]' : 'text-gray-300'}`}><AlignRight size={14}/></button>
         </BubbleMenu>
-
         <EditorContent editor={editor} className="outline-none text-gray-200 text-lg leading-relaxed min-h-full" />
       </div>
 
