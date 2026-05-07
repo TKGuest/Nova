@@ -361,7 +361,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             className={`bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] flex flex-col hover:border-[#3d3d3d] transition-all group/card relative overflow-hidden h-fit ${!isPeek ? 'min-h-0 md:min-h-[160px]' : 'min-h-[160px]'} shadow-sm ${!isPeek ? 'cursor-pointer' : ''}`}
                           >
                             <div className={`h-24 w-full relative overflow-hidden shrink-0 border-b border-[#1a1a1a] bg-[#161616] ${(!isPeek && !record.coverImage) ? 'hidden md:block' : ''}`}>
-                              {record.coverImage && (
+                              {record.coverImage?.url && (
                                 <img 
                                   src={record.coverImage.url + (record.coverImage.type === 'preset' ? (record.coverImage.url.includes('?') ? '&w=600' : '?w=600') : '')} 
                                   className="w-full h-full object-cover opacity-0 transition-opacity duration-700" 
