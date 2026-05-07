@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -111,6 +111,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       window.removeEventListener('click', handleClick);
     };
   }, [user, pageId]);
+
+  if (!isMounted) return <div className="flex items-center justify-center min-h-[400px] text-gray-500">Loading workspace...</div>;
 
   const addMasterTask = async (type: PropertyType = 'habit') => {
     if (!user) return;
@@ -261,8 +263,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 const completedCount = habits.filter(h => !!record.data?.[h.id]).length;
                 const totalCount = habits.length;
                 const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-                if (!isMounted) return <div className="w-full h-48 md:h-64 bg-[#111]" />;
 
                 return (
                   <div key={record.id} className="flex-1 flex flex-col space-y-6">
