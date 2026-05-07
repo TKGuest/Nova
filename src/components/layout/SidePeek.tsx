@@ -56,8 +56,6 @@ export function SidePeek() {
     fetchPage();
   }, [sidePeekPageId, user]);
 
-  if (!sidePeekPageId || !user) return null;
-
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isMobile) return;
     isDragging.current = true;
@@ -81,6 +79,9 @@ export function SidePeek() {
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   };
 
+  const isOpen = !!sidePeekPageId;
+  const isActuallyOpen = isOpen && user;
+
   return (
     <div
       style={{
@@ -90,9 +91,11 @@ export function SidePeek() {
         width: isMobile ? '100vw' : size.width,
         height: isMobile ? '100vh' : size.height,
         minWidth: isMobile ? '100vw' : '400px',
-        minHeight: isMobile ? '100vh' : '400px'
+        minHeight: isMobile ? '100vh' : '400px',
+        transform: `translateX(${isActuallyOpen ? '0%' : '100%'})`,
+        visibility: isActuallyOpen ? 'visible' : 'hidden'
       }}
-      className={`z-[100] bg-background border border-border shadow-2xl flex flex-col overflow-hidden resize bg-clip-padding ${isMobile ? 'rounded-none' : 'rounded-xl'}`}
+      className={`z-[100] bg-background border border-border shadow-2xl flex flex-col overflow-hidden resize bg-clip-padding ${isMobile ? 'rounded-none' : 'rounded-xl'} transition-transform duration-300`}
       onMouseDown={(e) => e.stopPropagation()} 
     >
       {/* Draggable Header */}
