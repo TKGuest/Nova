@@ -2,6 +2,14 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import ToggleNodeView from './ToggleNodeView';
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    toggleExtension: {
+      toggleToggle: () => ReturnType;
+    }
+  }
+}
+
 export const ToggleHeader = Node.create({
   name: 'toggleHeader',
   content: 'inline*',
@@ -53,13 +61,12 @@ export default Node.create({
 
   addCommands() {
     return {
-      toggleToggle: () => ({ commands, state }) => {
+      toggleToggle: () => ({ commands, state }: any) => {
         const { selection } = state;
         const { $from } = selection;
         const node = $from.node($from.depth);
         
         // Check if already inside a toggle
-        const isInsideToggle = editor => editor.isActive('toggleList');
         
         if (this.editor.isActive('toggleList')) {
           return commands.lift('toggleList');
