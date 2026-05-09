@@ -2,9 +2,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Image as ImageIcon, Upload, Link as LinkIcon, X, Loader2, Move } from 'lucide-react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage, db } from '@/lib/firebase';
-import { doc, updateDoc, collection, addDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useNotification } from '@/context/NotificationContext';
 
@@ -174,12 +174,12 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
     setDragY(0);
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (!isRepositioning) return;
     setDragY(e.clientY);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!isRepositioning || dragY === 0) return;
     const deltaY = e.clientY - dragY;
     const movementPercent = (deltaY / (imageContainerRef.current?.clientHeight || 200)) * 100;
@@ -191,7 +191,7 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
     setDragY(e.clientY);
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     setDragY(0);
   };
 

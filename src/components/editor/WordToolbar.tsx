@@ -146,7 +146,6 @@ function ToolbarButton({ icon, onClick, active, title }: { icon: React.ReactNode
       title={title}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      title={title}
       className={`p-1.5 rounded transition-colors ${active ? 'bg-[#37373d] text-white' : 'text-gray-400 hover:bg-[#37373d] hover:text-gray-200'}`}
     >
       {icon}
