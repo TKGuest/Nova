@@ -4,9 +4,7 @@ import ToggleNodeView from './ToggleNodeView';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
-    toggleExtension: {
-      toggleToggle: () => ReturnType;
-    }
+    toggleToggle: () => ReturnType;
   }
 }
 
@@ -61,13 +59,12 @@ export default Node.create({
 
   addCommands() {
     return {
-      toggleToggle: () => ({ commands, state }: any) => {
+      toggleToggle: () => ({ commands, state }: { commands: any, state: any }) => {
         const { selection } = state;
         const { $from } = selection;
         const node = $from.node($from.depth);
         
         // Check if already inside a toggle
-        
         if (this.editor.isActive('toggleList')) {
           return commands.lift('toggleList');
         }
