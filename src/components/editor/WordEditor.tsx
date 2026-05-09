@@ -12,6 +12,8 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import TextAlign from '@tiptap/extension-text-align';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -56,6 +58,8 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
       ToggleList,
       ToggleHeader,
       ToggleContent,
+      Subscript,
+      Superscript,
     ],
     content: '',
     editable: true,
