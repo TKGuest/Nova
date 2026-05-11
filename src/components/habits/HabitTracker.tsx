@@ -57,11 +57,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, taskId: string } | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, label: string } | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -113,7 +109,26 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
   }, [user, pageId]);
 
-  if (!isMounted) return <div className="flex items-center justify-center min-h-[400px] text-gray-500">Connecting to Nova Workspace...</div>;
+  const weeklyGroups = useMemo(() => {
+    const groups: Record<string, { label: string, items: PageRecord[] }> = {};
+    const today = startOfDay(new Date());
+    records.forEach(r => {
+      const d = parseISO(r.date);
+      const weekKey = format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      if (!groups[weekKey]) {
+        const start = startOfWeek(d, { weekStartsOn: 1 });
+        groups[weekKey] = { label: `${format(start, 'MMM d')} \u2013 ${format(addDays(start, 6), 'MMM d yyyy')}`, items: [] };
+      }
+      groups[weekKey].items.push(r);
+    });
+    const currentWeekKey = format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    if (!groups[currentWeekKey]) {
+      const start = startOfWeek(today, { weekStartsOn: 1 });
+      groups[currentWeekKey] = { label: `${format(start, 'MMM d')} \u2013 ${format(addDays(start, 6), 'MMM d yyyy')}`, items: [] };
+    }
+    Object.values(groups).forEach(g => g.items.sort((a, b) => a.date.localeCompare(b.date)));
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [records]);
 
   const addMasterTask = async (type: PropertyType = 'habit') => {
     if (!user) return;
@@ -161,27 +176,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     else sortOrder = LexoRank.parse(newOrder[newIndex-1].sortOrder).between(LexoRank.parse(newOrder[newIndex+1].sortOrder)).toString();
     await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', activeTaskId), { sortOrder });
   };
-
-  const weeklyGroups = useMemo(() => {
-    const groups: Record<string, { label: string, items: PageRecord[] }> = {};
-    const today = startOfDay(new Date());
-    records.forEach(r => {
-      const d = parseISO(r.date);
-      const weekKey = format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      if (!groups[weekKey]) {
-        const start = startOfWeek(d, { weekStartsOn: 1 });
-        groups[weekKey] = { label: `${format(start, 'MMM d')} – ${format(addDays(start, 6), 'MMM d yyyy')}`, items: [] };
-      }
-      groups[weekKey].items.push(r);
-    });
-    const currentWeekKey = format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    if (!groups[currentWeekKey]) {
-      const start = startOfWeek(today, { weekStartsOn: 1 });
-      groups[currentWeekKey] = { label: `${format(start, 'MMM d')} – ${format(addDays(start, 6), 'MMM d yyyy')}`, items: [] };
-    }
-    Object.values(groups).forEach(g => g.items.sort((a, b) => a.date.localeCompare(b.date)));
-    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [records]);
 
   const getTextClasses = () => {
     switch (textSize) {
