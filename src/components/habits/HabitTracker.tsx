@@ -130,10 +130,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
   }, [records]);
 
+  const safeParse = (s: string | null | undefined) => {
+    try { return s ? LexoRank.parse(s) : LexoRank.middle(); } catch { return LexoRank.middle(); }
+  };
+
   const addMasterTask = async (type: PropertyType = 'habit') => {
     if (!user) return;
     const id = `mtask_${Date.now()}`;
-    const sortOrder = masterTasks.length > 0 ? LexoRank.parse(masterTasks[masterTasks.length - 1].sortOrder).genNext().toString() : LexoRank.middle().toString();
+    const sortOrder = masterTasks.length > 0 ? safeParse(masterTasks[masterTasks.length - 1].sortOrder).genNext().toString() : LexoRank.middle().toString();
     await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', id), { id, name: type === 'habit' ? 'New Task' : type === 'notes' ? 'Quick Notes' : 'Progress Counter', sortOrder, type });
   };
 
@@ -153,7 +157,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const task = masterTasks.find(t => t.id === id);
     if (!task) return;
     const newId = `mtask_${Date.now()}`;
-    const sortOrder = LexoRank.parse(task.sortOrder).genNext().toString();
+    const sortOrder = safeParse(task.sortOrder).genNext().toString();
     await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', newId), { ...task, id: newId, name: `${task.name} (Copy)`, sortOrder });
   };
 
@@ -171,9 +175,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const newIndex = masterTasks.findIndex(t => t.id === overTaskId);
     const newOrder = arrayMove(masterTasks, oldIndex, newIndex);
     let sortOrder;
-    if (newIndex === 0) sortOrder = LexoRank.parse(newOrder[1].sortOrder).genPrev().toString();
-    else if (newIndex === newOrder.length - 1) sortOrder = LexoRank.parse(newOrder[newIndex-1].sortOrder).genNext().toString();
-    else sortOrder = LexoRank.parse(newOrder[newIndex-1].sortOrder).between(LexoRank.parse(newOrder[newIndex+1].sortOrder)).toString();
+    if (newIndex === 0) sortOrder = safeParse(newOrder[1]?.sortOrder).genPrev().toString();
+    else if (newIndex === newOrder.length - 1) sortOrder = safeParse(newOrder[newIndex-1]?.sortOrder).genNext().toString();
+    else sortOrder = safeParse(newOrder[newIndex-1]?.sortOrder).between(safeParse(newOrder[newIndex+1]?.sortOrder)).toString();
     await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', activeTaskId), { sortOrder });
   };
 
