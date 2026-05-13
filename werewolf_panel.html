@@ -393,6 +393,17 @@ const I18N = {
     hist_bm_revenge_armed: "Bloody Mary revenge armed ({rule} next night).",
     hist_witch_heal_wasted: "Witch used healing potion on {name}, but it had no effect.",
     hist_dw_dies_too: "{name} (Dire Wolf) also dies because their lover died.",
+    hist_cupid_match: "Cupid matched {p1} and {p2} as Lovers.",
+    hist_bodyguard_protect: "Bodyguard chose to protect {name} tonight.",
+    hist_dire_wolf_lover: "Dire Wolf chose {name} as their lover.",
+    hist_spellcaster_silence: "Spellcaster silenced {name}.",
+    hist_wolf_identified: "{name} is identified as {role}.",
+    hist_seer_inspect: "Seer inspected {name}: {result}.",
+    hist_huntress_shot: "Huntress shot {name}.",
+    hist_revealer_wolf: "Revealer revealed {name} — WOLF! {name} will die.",
+    hist_revealer_not_wolf: "Revealer revealed {name} — NOT a wolf! Revealer will die instead.",
+    hist_witch_heal: "Witch used healing potion to save {name}.",
+    hist_witch_poison: "Witch poisoned {name}.",
     game_over: "Game Over! {team} wins!", seer_wolf: "Wolf", seer_human: "Human", unmapped: "?",
     reset: "Reset", sunrise_intro: "Everyone wakes up. These players died:"
   },
@@ -431,6 +442,17 @@ const I18N = {
     hist_bm_revenge_armed: "Bloody Mary đã kích hoạt trả thù ({rule} đêm sau).",
     hist_witch_heal_wasted: "Phù thủy dùng bình cứu cho {name} nhưng không có tác dụng.",
     hist_dw_dies_too: "{name} (Sói đau khổ) cũng chết vì người yêu chết.",
+    hist_cupid_match: "Cupid kết đôi {p1} và {p2} thành Người yêu.",
+    hist_bodyguard_protect: "Bảo vệ chọn bảo vệ {name} đêm nay.",
+    hist_dire_wolf_lover: "Sói đau khổ chọn {name} làm người yêu.",
+    hist_spellcaster_silence: "Pháp sư câm khóa miệng {name}.",
+    hist_wolf_identified: "{name} được xác định là {role}.",
+    hist_seer_inspect: "Tiên tri soi {name}: {result}.",
+    hist_huntress_shot: "Nữ thợ săn bắn {name}.",
+    hist_revealer_wolf: "Người khám phá lật mặt {name} — là SÓI! {name} sẽ chết.",
+    hist_revealer_not_wolf: "Người khám phá lật mặt {name} — không phải sói! Người khám phá sẽ chết thay.",
+    hist_witch_heal: "Phù thủy dùng thuốc cứu {name}.",
+    hist_witch_poison: "Phù thủy dùng thuốc độc với {name}.",
     game_over: "Trò chơi kết thúc! {team} thắng!", seer_wolf: "Sói", seer_human: "Người", unmapped: "?",
     reset: "Đặt lại", sunrise_intro: "Mọi người đều thức dậy. Những người sau đây đã chết:"
   }
@@ -942,27 +964,7 @@ function getCurrentPhaseData() {
 
 
 
-function shouldSkipRole(r) {
-  if (r === 'werewolves_group') return false;
-  let p = STATE.players.find(x => x.role === r);
-  if (!p) return true;
-  if (p.isDead) {
-     if (['bodyguard', 'witch', 'seer', 'apprentice_seer', 'huntress', 'revealer', 'spellcaster', 'dire_wolf'].includes(r)) return true;
-  }
-  
-  if (r === 'dire_wolf') {
-    if (STATE.day === 1 && !p.direWolfTarget) return false;
-    return true;
-  }
 
-  if (r === 'fang_face' && STATE.day > 1) {
-    let otherWolves = STATE.players.some(x => !x.isDead && ROLES[x.role]?.team === 'wolf' && x.role !== 'fang_face');
-    if (otherWolves) return true;
-  }
-  if (r === 'alpha_wolf' && (!STATE.alphaWolfTriggered || STATE.alphaWolfUsed)) return true;
-  
-  return false; // Don't skip active roles (Bodyguard, Seer, etc.)
-}
 
 function healTarget(id) {
   pushUndo();
@@ -1166,6 +1168,7 @@ function confirmAction() {
           return showToast('You must select a Wolf Team member (wolf_pending).');
         p.role = phase.mapRole; p.originalRole = phase.mapRole;
         p.icon = ROLES[p.role]?.emoji || '';
+        addHistoryT("system", "hist_wolf_identified", { name: p.name, role: getRoleName(phase.mapRole) });
       });
     } else {
       // Normal role assignment
@@ -1219,7 +1222,7 @@ function confirmAction() {
       let p2 = STATE.players.find(x=>x.id===STATE.selectedTargets[1]);
       p1.lovers.push(p2.id); p2.lovers.push(p1.id);
       if (p1.role === 'tanner' || p2.role === 'tanner') { p1.tannerLover = true; p2.tannerLover = true; }
-      addHistory("system", `Cupid matched ${p1.name} and ${p2.name}.`);
+      addHistoryT("system", "hist_cupid_match", { p1: p1.name, p2: p2.name });
     }
     actionTaken = true;
   }
@@ -1231,6 +1234,7 @@ function confirmAction() {
           return showToast("Bodyguard can't protect the same person twice in a row.");
         let p = STATE.players.find(x=>x.id===targetId); p.protected = true;
         STATE.lastBodyguardProtectedId = targetId;
+        addHistoryT("system", "hist_bodyguard_protect", { name: p.name });
       }
       actionTaken = true;
     } else {
@@ -1243,6 +1247,7 @@ function confirmAction() {
         let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
         if (p.role && ROLES[p.role].team === 'wolf') return showToast("Dire Wolf cannot choose another wolf!");
         actor.direWolfTarget = p.id;
+        addHistoryT("system", "hist_dire_wolf_lover", { name: p.name });
       }
       actionTaken = true;
     } else {
@@ -1255,8 +1260,10 @@ function confirmAction() {
         let targetId = STATE.selectedTargets[0];
         if (STATE.lastSpellcasterSilencedId && STATE.lastSpellcasterSilencedId === targetId)
           return showToast("Spellcaster can't silence the same person twice in a row.");
-        STATE.players.find(x=>x.id===targetId).silenced = true;
+        let sp = STATE.players.find(x=>x.id===targetId);
+        sp.silenced = true;
         STATE.lastSpellcasterSilencedId = targetId;
+        addHistoryT("system", "hist_spellcaster_silence", { name: sp.name });
       }
       actionTaken = true;
     } else {
@@ -1340,6 +1347,7 @@ function confirmAction() {
     if (STATE.selectedTargets.length === 1 && actor) {
       let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
       STATE.nightDeaths.push({id: p.id, source: 'witch_poison'}); STATE.witchPoisonUsed = true;
+      addHistoryT("system", "hist_witch_poison", { name: p.name });
     }
     actionTaken = true;
   }
@@ -1347,7 +1355,9 @@ function confirmAction() {
     if (STATE.selectedTargets.length === 1) {
       let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
       let isWolf = p.role && (ROLES[p.role].team === 'wolf' || p.role === 'lycan' || p.cursedBitten) && p.role !== 'wolf_man';
-      STATE.seerResult = { name: p.name, res: isWolf ? t('seer_wolf') : t('seer_human') };
+      let result = isWolf ? t('seer_wolf') : t('seer_human');
+      STATE.seerResult = { name: p.name, res: result };
+      addHistoryT("wolf", "hist_seer_inspect", { name: p.name, result });
       STATE.selectedTargets = [];
       saveState();
       return;
@@ -1362,7 +1372,9 @@ function confirmAction() {
     if (STATE.selectedTargets.length === 1) {
       if (STATE.huntressUsed) return showToast("Huntress has already used her shot.");
       if (actor) {
-        STATE.nightDeaths.push({id: STATE.selectedTargets[0], source: 'huntress'}); STATE.huntressUsed = true;
+        let htarget = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
+        STATE.nightDeaths.push({id: htarget.id, source: 'huntress'}); STATE.huntressUsed = true;
+        addHistoryT("system", "hist_huntress_shot", { name: htarget.name });
       }
       actionTaken = true;
     } else {
@@ -1373,8 +1385,13 @@ function confirmAction() {
     if (STATE.selectedTargets.length === 1) {
       if (actor) {
         let p = STATE.players.find(x=>x.id===STATE.selectedTargets[0]);
-        if (p.role && ROLES[p.role].team === 'wolf') STATE.nightDeaths.push({id: p.id, source: 'revealer'});
-        else STATE.nightDeaths.push({id: actor.id, source: 'revealer_fail'});
+        if (p.role && ROLES[p.role].team === 'wolf') {
+          STATE.nightDeaths.push({id: p.id, source: 'revealer'});
+          addHistoryT("system", "hist_revealer_wolf", { name: p.name });
+        } else {
+          STATE.nightDeaths.push({id: actor.id, source: 'revealer_fail'});
+          addHistoryT("system", "hist_revealer_not_wolf", { name: p.name });
+        }
       }
       actionTaken = true;
     } else {
@@ -1493,7 +1510,6 @@ function healTarget(id) {
   if (!p) return;
 
   // Tough Guy: Witch can't save him from the bite (and can't even see it on the bite night).
-  // On later nights, the Witch may "heal" him, but it only wastes the potion.
   if (p.role === 'tough_guy') {
     pushUndo();
     STATE.witchHealUsed = true;
@@ -1506,6 +1522,7 @@ function healTarget(id) {
     pushUndo();
     STATE.nightDeaths.splice(idx, 1);
     STATE.witchHealUsed = true;
+    addHistoryT("system", "hist_witch_heal", { name: p.name });
     saveState();
   }
 }
@@ -1641,7 +1658,13 @@ function updatePanel() {
     if (phase.mapping) {
       banner.classList.remove('d-none');
       banner.innerText = t('map_role', {role: phase.displayName || getRoleName(phase.mapRole), count: phase.poolForMap});
-      quoteEl.innerText = t('wake_gen', {role: phase.displayName || getRoleName(phase.role)});
+      if (phase.isWolfRefinement) {
+        quoteEl.innerText = STATE.lang === 'vi'
+          ? `Xác định ai trong đội sói là ${getRoleName(phase.mapRole)}.`
+          : `Identify which Wolf Team member is the ${getRoleName(phase.mapRole)}.`;
+      } else {
+        quoteEl.innerText = t('wake_gen', {role: phase.displayName || getRoleName(phase.role)});
+      }
       confirmBtn.innerText = t('map_btn');
     } else {
       banner.classList.add('d-none');
