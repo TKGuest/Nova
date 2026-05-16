@@ -109,6 +109,29 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
   }, [user, pageId]);
 
+  // Auto-create today's record if it doesn't exist yet
+  useEffect(() => {
+    if (!user) return;
+
+    const createTodayRecord = async (date: Date, meta: PageModel | null) => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const recordId = `rec_${dateStr}`;
+      const recordRef = doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId);
+      const snap = await getDoc(recordRef);
+      if (!snap.exists()) {
+        const data: Record<string, unknown> = { id: recordId, date: dateStr, data: {} };
+        if (meta?.defaultRecordCover) data.coverImage = meta.defaultRecordCover;
+        await setDoc(recordRef, data);
+      }
+    };
+
+    createTodayRecord(new Date(), pageMeta);
+
+    const handleDailyReset = () => createTodayRecord(new Date(), pageMeta);
+    window.addEventListener('daily-reset', handleDailyReset);
+    return () => window.removeEventListener('daily-reset', handleDailyReset);
+  }, [user, pageId, pageMeta]);
+
   const weeklyGroups = useMemo(() => {
     const groups: Record<string, { label: string, items: PageRecord[] }> = {};
     const today = startOfDay(new Date());
