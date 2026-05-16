@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc } from 'firebase/firestore';
 import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
