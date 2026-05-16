@@ -10,7 +10,7 @@ import { useWorkspace } from '@/context/WorkspaceContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modals';
 import { PageModel } from '../../types';
 import { format, isSameDay, startOfDay, eachDayOfInterval, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, parseISO, addDays, isAfter, isSameWeek, getYear, getMonth, addMonths, subMonths, setYear, setMonth, isSameMonth } from 'date-fns';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { LexoRank } from 'lexorank';
@@ -60,7 +60,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -527,14 +528,28 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             <button onClick={() => addMasterTask('notes')} className="flex-1 py-2 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-500 hover:text-white hover:border-[#3d3d3d] transition-all"><StickyNote size={14}/> <span className="text-[8px] font-black uppercase">Notes</span></button>
           </div>
           <div className="space-y-2">
-            {masterTasks.map(task => (
-              <div key={task.id} className="flex items-center gap-3 p-2 bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] hover:border-[#3d3d3d] group">
-                <GripVertical size={14} className="text-gray-700" />
-                <div className="w-6 flex justify-center">{task.type === 'notes' ? <StickyNote size={12} className="text-gray-600"/> : task.type === 'counter' ? <Activity size={12} className="text-gray-600"/> : <Check size={12} className="text-gray-600"/>}</div>
-                <input className="flex-1 bg-transparent text-[11.5px] font-bold text-gray-300 outline-none" defaultValue={task.name} onBlur={(e) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: (e.target as HTMLInputElement).value })} />
-                <button onClick={() => deleteMasterTask(task.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-600 hover:text-red-500 transition-all"><Trash2 size={14}/></button>
-              </div>
-            ))}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={async (event) => {
+                const { active, over } = event;
+                if (!over || active.id === over.id || !user) return;
+                const oldIndex = masterTasks.findIndex(t => t.id === active.id);
+                const newIndex = masterTasks.findIndex(t => t.id === over.id);
+                const newOrder = arrayMove(masterTasks, oldIndex, newIndex);
+                let sortOrder;
+                if (newIndex === 0) sortOrder = safeParse(newOrder[1]?.sortOrder).genPrev().toString();
+                else if (newIndex === newOrder.length - 1) sortOrder = safeParse(newOrder[newIndex - 1]?.sortOrder).genNext().toString();
+                else sortOrder = safeParse(newOrder[newIndex - 1]?.sortOrder).between(safeParse(newOrder[newIndex + 1]?.sortOrder)).toString();
+                await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', active.id.toString()), { sortOrder });
+              }}
+            >
+              <SortableContext items={masterTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                {masterTasks.map(task => (
+                  <SortableModalRow key={task.id} task={task} onDelete={deleteMasterTask} onRename={(id, name) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), { name })} />
+                ))}
+              </SortableContext>
+            </DndContext>
           </div>
         </div>
       </Modal>
@@ -623,6 +638,31 @@ function SortableMasterItem({ id, task, completed, onToggle, onContextMenu, isEd
       ) : (
         <span className={`flex-1 font-medium truncate tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
       )}
+    </div>
+  );
+}
+
+function SortableModalRow({ task, onDelete, onRename }: { task: MasterTask; onDelete: (id: string) => void; onRename: (id: string, name: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const Icon = task.type === 'notes' ? StickyNote : task.type === 'counter' ? Activity : Check;
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 p-2 bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] hover:border-[#3d3d3d] group">
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 text-gray-600 hover:text-gray-400 transition-colors">
+        <GripVertical size={14} />
+      </div>
+      <div className="w-5 flex justify-center shrink-0">
+        <Icon size={12} className="text-gray-600" />
+      </div>
+      <input
+        className="flex-1 bg-transparent text-[11.5px] font-bold text-gray-300 outline-none min-w-0"
+        defaultValue={task.name}
+        onBlur={(e) => onRename(task.id, (e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      />
+      <button onClick={() => onDelete(task.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-600 hover:text-red-500 transition-all shrink-0">
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 }
