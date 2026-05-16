@@ -84,7 +84,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   }, [counterFormat, pageId, isLoaded]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !pageId) return;
     const qMaster = query(collection(db, 'users', user.uid, 'pages', pageId, 'master_tasks'), orderBy('sortOrder', 'asc'));
     const unsubMaster = onSnapshot(qMaster, (snapshot) => {
       setMasterTasks(snapshot.docs.map(d => ({ type: 'habit', ...d.data(), id: d.id } as MasterTask)));
@@ -112,7 +112,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   // Auto-create today's record if it doesn't exist yet
   useEffect(() => {
-    if (!user) return;
+    if (!user || !pageId) return;
 
     const createTodayRecord = async (date: Date, meta: PageModel | null) => {
       const dateStr = format(date, 'yyyy-MM-dd');
