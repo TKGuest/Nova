@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc } from 'firebase/firestore';
-import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2 } from 'lucide-react';
+import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -15,7 +15,6 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { CSS } from '@dnd-kit/utilities';
 import { LexoRank } from 'lexorank';
 import { CoverImage } from '@/components/ui/CoverImage';
-import { GamificationDashboard } from './GamificationDashboard';
 
 type PropertyType = 'habit' | 'counter' | 'notes';
 type TextSize = 'small' | 'medium' | 'large';
@@ -25,11 +24,6 @@ interface MasterTask {
   name: string;
   sortOrder: string;
   type: PropertyType;
-  
-  // Gamification & Sub-tasks
-  pointsValue?: number;
-  isBadHabit?: boolean;
-  subTasks?: { id: string; title: string }[];
 }
 
 interface PageRecord {
@@ -63,7 +57,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, taskId: string } | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, label: string } | null>(null);
-  const [isGamificationOpen, setIsGamificationOpen] = useState(false);
 
 
   const sensors = useSensors(
@@ -117,66 +110,27 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
   }, [user, pageId]);
 
-  // Auto-create today's record and process daily logic
+  // Auto-create today's record if it doesn't exist yet
   useEffect(() => {
     if (!user || !pageId) return;
 
-    const processGamificationDaily = async (dateStr: string) => {
-      const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
-      const statsSnap = await getDoc(statsRef);
-      if (!statsSnap.exists()) return;
-      const stats = statsSnap.data() as any;
-      const today = parseISO(dateStr);
-      let updates: any = {};
-      
-      // Decay points if it's been more than a day
-      if (stats.lastDecayDate) {
-        const lastDecay = parseISO(stats.lastDecayDate);
-        if (isAfter(startOfDay(today), startOfDay(lastDecay))) {
-          // It's a new day! Apply decay: Let's say 5 points per day.
-          const diffDays = Math.floor((today.getTime() - lastDecay.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays > 0) {
-            updates.points = stats.points - (diffDays * 5); // 5 points decay per day, can go negative
-            updates.lastDecayDate = dateStr;
-            
-            if (updates.points < 0) updates.debt = true;
-            if (diffDays > 1) {
-              updates.streakMultiplier = 1.0;
-            } else {
-              // Streak increases slightly every day they log in
-              updates.streakMultiplier = Math.min(1.5, (stats.streakMultiplier || 1.0) + 0.01);
-            }
-          }
-        }
-      } else {
-        updates.lastDecayDate = dateStr;
-      }
-      
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(statsRef, updates);
-      }
-    };
-
-    const createTodayRecord = async () => {
-      const dateStr = format(new Date(), 'yyyy-MM-dd');
+    const createTodayRecord = async (date: Date, meta: PageModel | null) => {
+      const dateStr = format(date, 'yyyy-MM-dd');
       const recordId = `rec_${dateStr}`;
       const recordRef = doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId);
       const snap = await getDoc(recordRef);
       if (!snap.exists()) {
         const data: Record<string, unknown> = { id: recordId, date: dateStr, data: {} };
-        if (pageMeta?.defaultRecordCover) data.coverImage = pageMeta.defaultRecordCover;
+        if (meta?.defaultRecordCover) data.coverImage = meta.defaultRecordCover;
         await setDoc(recordRef, data);
-        
-        await processGamificationDaily(dateStr);
       }
     };
 
-    createTodayRecord();
-    const interval = setInterval(() => {
-      createTodayRecord();
-    }, 60000); // Check every minute if day has rolled over
+    createTodayRecord(new Date(), pageMeta);
 
-    return () => clearInterval(interval);
+    const handleDailyReset = () => createTodayRecord(new Date(), pageMeta);
+    window.addEventListener('daily-reset', handleDailyReset);
+    return () => window.removeEventListener('daily-reset', handleDailyReset);
   }, [user, pageId, pageMeta]);
 
   const weeklyGroups = useMemo(() => {
@@ -233,54 +187,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   const toggleCompletion = async (recordId: string, taskId: string, current: boolean) => {
     if (!user) return;
-    const isCompleted = !current;
-    await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId), { [`data.${taskId}`]: isCompleted });
-    
-    // Gamification Hook
-    try {
-      const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
-      const statsSnap = await getDoc(statsRef);
-      if (statsSnap.exists()) {
-        const stats = statsSnap.data() as any;
-        const task = masterTasks.find(t => t.id === taskId);
-        
-        // Base points: either custom defined on task, or default 10.
-        const basePoints = task?.pointsValue || 10; 
-        const multiplier = stats.streakMultiplier || 1.0;
-        const pointsChange = Math.round(basePoints * multiplier);
-        
-        let newPoints = stats.points;
-        let pointsEarnedToday = stats.pointsEarnedToday || 0;
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        
-        if (stats.lastPointGainDate !== todayStr) {
-          pointsEarnedToday = 0; // Reset cap for new day
-        }
-        
-        const DAILY_CAP = 200; // Inflation control cap
-        let actualGain = pointsChange;
-        
-        if (isCompleted) {
-          if (pointsEarnedToday + actualGain > DAILY_CAP) {
-            actualGain = Math.max(0, DAILY_CAP - pointsEarnedToday);
-          }
-          newPoints += actualGain;
-          pointsEarnedToday += actualGain;
-        } else {
-          newPoints = stats.points - pointsChange; // Debt mode allows negative
-          pointsEarnedToday = Math.max(0, pointsEarnedToday - pointsChange);
-        }
-        
-        await updateDoc(statsRef, { 
-          points: newPoints,
-          pointsEarnedToday,
-          lastPointGainDate: todayStr,
-          debt: newPoints < 0
-        });
-      }
-    } catch (err) {
-      console.warn("Gamification error:", err);
-    }
+    await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId), { [`data.${taskId}`]: !current });
   };
 
   const handleDragEnd = async (event: any) => {
@@ -330,12 +237,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-[#1a1a1a]">
           <div className="flex items-center gap-2">
             <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 bg-[#2383e2] text-white rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10 shrink-0"><Plus size={14}/> New</button>
-            <button 
-              onClick={() => setIsGamificationOpen(!isGamificationOpen)} 
-              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isGamificationOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
-            >
-              <Gamepad2 size={14}/> Gamify
-            </button>
             <div className="relative">
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }}
@@ -377,11 +278,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         )}
 
         <div className={`flex-1 ${isPeek ? 'overflow-auto' : ''} custom-scrollbar overscroll-contain touch-pan-y`}>
-          {isGamificationOpen ? (
-            <div className="p-4 bg-[#111] rounded-xl border border-purple-900/30 min-h-[400px]">
-               <GamificationDashboard pageId={pageId} />
-            </div>
-          ) : isPeek && sidePeekRecordId ? (
+          {isPeek && sidePeekRecordId ? (
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
               {records.filter(r => r.id === sidePeekRecordId).map(record => {
                 const dateObj = parseISO(record.date);
@@ -410,25 +307,18 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-0.5">
                           {masterTasks.filter(t => t.type === 'habit').map(task => (
-                              <SortableMasterItem 
-                                key={task.id} 
-                                id={`${record.id}::${task.id}`} 
-                                task={task} 
-                                completed={!!record.data?.[task.id]} 
-                                recordData={record.data || {}}
-                                isPeek={true}
-                                onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
-                                onToggleSubTask={async (subId: string, current: boolean) => {
-                                  if (!user) return;
-                                  const key = `${task.id}_${subId}`;
-                                  await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'records', record.id), { [`data.${key}`]: !current });
-                                }}
-                                onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
-                                isEditing={editingTaskId === task.id} 
-                                onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
-                                textSizeClass={textSize === 'large' ? 'text-base' : textSize === 'medium' ? 'text-sm' : 'text-[13px]'} 
-                                checkboxScale="scale-[1.1]" 
-                              />
+                            <SortableMasterItem 
+                              key={task.id} 
+                              id={`${record.id}::${task.id}`} 
+                              task={task} 
+                              completed={!!record.data?.[task.id]} 
+                              onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
+                              onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
+                              isEditing={editingTaskId === task.id} 
+                              onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
+                              textSizeClass={textSize === 'large' ? 'text-base' : textSize === 'medium' ? 'text-sm' : 'text-[13px]'} 
+                              checkboxScale="scale-[1.1]" 
+                            />
                           ))}
                         </div>
                       </SortableContext>
@@ -527,25 +417,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                               <div className="space-y-0 min-h-[40px]">
                                 <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
                                   {masterTasks.filter(t => t.type === 'habit').map(task => (
-                                    <SortableMasterItem 
-                                      key={task.id} 
-                                      id={`${record.id}::${task.id}`} 
-                                      task={task} 
-                                      completed={!!record.data?.[task.id]} 
-                                      recordData={record.data || {}}
-                                      isPeek={false}
-                                      onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
-                                      onToggleSubTask={async (subId: string, current: boolean) => {
-                                        if (!user) return;
-                                        const key = `${task.id}_${subId}`;
-                                        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'records', record.id), { [`data.${key}`]: !current });
-                                      }}
-                                      onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
-                                      isEditing={editingTaskId === task.id} 
-                                      onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
-                                      textSizeClass={getTextClasses()} 
-                                      checkboxScale={getCheckboxScale()} 
-                                    />
+                                    <SortableMasterItem key={task.id} id={`${record.id}::${task.id}`} task={task} completed={!!record.data?.[task.id]} onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} isEditing={editingTaskId === task.id} onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} textSizeClass={getTextClasses()} checkboxScale={getCheckboxScale()} />
                                   ))}
                                 </SortableContext>
                               </div>
@@ -674,7 +546,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             >
               <SortableContext items={masterTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                 {masterTasks.map(task => (
-                  <SortableModalRow key={task.id} task={task} onDelete={deleteMasterTask} onRename={(id, name) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), { name })} onUpdate={(id, updates) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)} />
+                  <SortableModalRow key={task.id} task={task} onDelete={deleteMasterTask} onRename={(id, name) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), { name })} />
                 ))}
               </SortableContext>
             </DndContext>
@@ -748,141 +620,49 @@ function DatePickerModal({ isOpen, onClose, onSelect, initialDate }: any) {
   );
 }
 
-function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, recordData, isPeek, onContextMenu, isEditing, onRename, textSizeClass, checkboxScale }: any) {
+function SortableMasterItem({ id, task, completed, onToggle, onContextMenu, isEditing, onRename, textSizeClass, checkboxScale }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const [tempName, setTempName] = useState(task.name);
-  const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  
   useEffect(() => { if (isEditing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [isEditing]);
   if (task.type !== 'habit') return null;
-  
-  const hasSubtasks = task.subTasks && task.subTasks.length > 0;
-
   return (
-    <div ref={setNodeRef} style={style} className="flex flex-col mb-1 group/item">
-      <div onContextMenu={onContextMenu} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 px-1 py-0.5 rounded-md hover:bg-[#252526] transition-all min-h-[22px]">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity"><GripVertical size={10} className="text-gray-800" /></div>
-        
-        {isPeek && hasSubtasks ? (
-          <button onClick={() => setIsExpanded(!isExpanded)} className="text-gray-500 hover:text-gray-300 transition-colors">
-            <ChevronRight size={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-          </button>
-        ) : (
-          <div className="w-[14px]" /> // Spacer
-        )}
-
-        <div className={`${checkboxScale} origin-left shrink-0`} onClick={(e) => e.stopPropagation()}>
-          <Checkbox checked={completed} onClick={onToggle} />
-        </div>
-        
-        {isEditing ? (
-          <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
-        ) : (
-          <span className={`flex-1 font-medium truncate tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
-        )}
+    <div ref={setNodeRef} style={style} onContextMenu={onContextMenu} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 px-1 py-0.5 rounded-md hover:bg-[#252526] transition-all group/item min-h-[22px]">
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity"><GripVertical size={10} className="text-gray-800" /></div>
+      <div className={`${checkboxScale} origin-left shrink-0`} onClick={(e) => e.stopPropagation()}>
+        <Checkbox checked={completed} onClick={onToggle} />
       </div>
-
-      {isPeek && isExpanded && hasSubtasks && (
-        <div className="ml-8 pl-2 border-l-2 border-[#1a1a1a] mt-1 space-y-1">
-          {task.subTasks.map((sub: any) => {
-            const subKey = `${task.id}_${sub.id}`;
-            const subCompleted = !!recordData?.[subKey];
-            return (
-              <div key={sub.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#1a1a1a] transition-colors">
-                <div className="scale-[0.8] origin-left">
-                  <Checkbox checked={subCompleted} onClick={() => onToggleSubTask(sub.id, subCompleted)} />
-                </div>
-                <span className={`text-[12px] transition-colors ${subCompleted ? 'text-gray-600 line-through' : 'text-gray-400'}`}>
-                  {sub.title}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+      {isEditing ? (
+        <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
+      ) : (
+        <span className={`flex-1 font-medium truncate tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
       )}
     </div>
   );
 }
 
-function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: MasterTask; onDelete: (id: string) => void; onRename: (id: string, name: string) => void; onUpdate?: (id: string, updates: any) => void; }) {
+function SortableModalRow({ task, onDelete, onRename }: { task: MasterTask; onDelete: (id: string) => void; onRename: (id: string, name: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const Icon = task.type === 'notes' ? StickyNote : task.type === 'counter' ? Activity : Check;
-  const [expanded, setExpanded] = useState(false);
-  const [newSubTask, setNewSubTask] = useState('');
-
   return (
-    <div ref={setNodeRef} style={style} className="flex flex-col bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] hover:border-[#3d3d3d] group">
-      <div className="flex items-center gap-3 p-2">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 text-gray-600 hover:text-gray-400 transition-colors">
-          <GripVertical size={14} />
-        </div>
-        <div className="w-5 flex justify-center shrink-0">
-          <Icon size={12} className="text-gray-600" />
-        </div>
-        <input
-          className="flex-1 bg-transparent text-[11.5px] font-bold text-gray-300 outline-none min-w-0"
-          defaultValue={task.name}
-          onBlur={(e) => onRename(task.id, (e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        />
-        {task.type === 'habit' && onUpdate && (
-          <button onClick={() => setExpanded(!expanded)} className="p-1.5 text-gray-600 hover:text-blue-400 transition-colors shrink-0">
-            <Settings size={14} />
-          </button>
-        )}
-        <button onClick={() => onDelete(task.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-600 hover:text-red-500 transition-all shrink-0">
-          <Trash2 size={14} />
-        </button>
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 p-2 bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] hover:border-[#3d3d3d] group">
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 text-gray-600 hover:text-gray-400 transition-colors">
+        <GripVertical size={14} />
       </div>
-
-      {expanded && task.type === 'habit' && onUpdate && (
-        <div className="p-3 pt-0 border-t border-[#2d2d2d] mt-1 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Points Value</span>
-            <input 
-              type="number" 
-              className="bg-[#111] border border-[#2d2d2d] rounded px-2 py-1 text-[11px] text-white w-16 text-right outline-none focus:border-blue-500"
-              defaultValue={task.pointsValue || 10}
-              onBlur={(e) => onUpdate(task.id, { pointsValue: parseInt(e.target.value) || 10 })}
-            />
-          </div>
-          
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Sub-Tasks</span>
-            <div className="space-y-1 mt-1">
-              {(task.subTasks || []).map((sub: any) => (
-                <div key={sub.id} className="flex items-center gap-2 px-2 py-1 bg-[#111] rounded border border-[#2d2d2d]">
-                  <span className="text-[11px] text-gray-300 flex-1">{sub.title}</span>
-                  <button onClick={() => {
-                    const newSubs = task.subTasks!.filter(s => s.id !== sub.id);
-                    onUpdate(task.id, { subTasks: newSubs });
-                  }} className="text-gray-600 hover:text-red-500"><Trash2 size={10}/></button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <input 
-                type="text" 
-                value={newSubTask}
-                onChange={e => setNewSubTask(e.target.value)}
-                placeholder="New sub-task..."
-                className="flex-1 bg-[#111] border border-[#2d2d2d] rounded px-2 py-1.5 text-[11px] text-white outline-none focus:border-blue-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newSubTask.trim()) {
-                    const subId = Date.now().toString();
-                    const newSubs = [...(task.subTasks || []), { id: subId, title: newSubTask.trim() }];
-                    onUpdate(task.id, { subTasks: newSubs });
-                    setNewSubTask('');
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="w-5 flex justify-center shrink-0">
+        <Icon size={12} className="text-gray-600" />
+      </div>
+      <input
+        className="flex-1 bg-transparent text-[11.5px] font-bold text-gray-300 outline-none min-w-0"
+        defaultValue={task.name}
+        onBlur={(e) => onRename(task.id, (e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      />
+      <button onClick={() => onDelete(task.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-600 hover:text-red-500 transition-all shrink-0">
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 }

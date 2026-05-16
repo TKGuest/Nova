@@ -24,6 +24,7 @@ export interface PageModel {
   type: 'note' | 'habit';
   createdAt: number;
   isFavorite?: boolean;
+  deletedAt?: number;
   content?: string;
   coverImage?: {
     url: string;
@@ -46,4 +47,42 @@ export interface WorkspacePage {
   parentId?: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+// Gamification Models
+export interface HabitStats {
+  points: number;
+  vaultBalance: number;
+  streakMultiplier: number;
+  debt: boolean;
+  lastDecayDate: string; // ISO string to track point decay
+  lastStreakReset: string; 
+  pointsEarnedToday?: number; // Inflation control cap
+  lastPointGainDate?: string; 
+  equippedBuffs: { itemId: string; name: string; expiresAt: number }[];
+}
+
+export interface InventoryItem {
+  id: string; // "insurance", "holiday", "timer", "note"
+  name: string;
+  type: 'buff' | 'timer' | 'note' | 'instant';
+  quantity: number;
+  costPurchased: number; // for compound cost calculation
+  customText?: string;
+}
+
+export interface SubTask {
+  id: string;
+  title: string;
+  completedAt?: string | null;
+}
+
+export interface GamificationTask {
+  id: string; // Links to MasterTask ID
+  pointsValue: number;
+  isBadHabit: boolean;
+  maxDailyCompletions: number; // 1 for tickbox, >1 for counter
+  subTasks: SubTask[];
+  compoundCostModifier: number; // For bad habits 
+  scheduleType: 'daily' | 'weekly' | 'event';
 }
