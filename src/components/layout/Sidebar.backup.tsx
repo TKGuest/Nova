@@ -23,7 +23,6 @@ export function Sidebar() {
 
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, page: PageModel } | null>(null);
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
-  const [isTrashOpen, setIsTrashOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -43,20 +42,8 @@ export function Sidebar() {
         await setDoc(doc(db, 'users', user.uid, 'pages', habitId), habitPage);
         
         fetched = [notePage, habitPage];
-        fetched = [notePage, habitPage];
         router.push(`/page/${noteId}`);
       }
-
-      // Auto-cleanup 30-day old trashed pages
-      const now = Date.now();
-      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-      for (const page of fetched) {
-        if (page.deletedAt && now - page.deletedAt > THIRTY_DAYS) {
-          try { await deleteDoc(doc(db, 'users', user.uid, 'pages', page.id)); } catch {}
-        }
-      }
-      fetched = fetched.filter(page => !(page.deletedAt && now - page.deletedAt > THIRTY_DAYS));
-
       setPages(fetched);
     });
 
@@ -108,27 +95,13 @@ export function Sidebar() {
       setRenamingPageId(page.id);
     } else if (action === 'trash') {
       customConfirm({
-        title: 'Move to Trash?',
-        message: `Are you sure you want to move "${page.title}" to the trash? It will be permanently deleted after 30 days.`,
+        title: 'Delete this page?',
+        message: `Are you sure you want to move "${page.title}" to the trash? This action can be undone later from your trash folder.`,
         confirmLabel: 'Move to Trash',
-        onConfirm: async () => {
-          await updateDoc(doc(db, 'users', user.uid, 'pages', page.id), { deletedAt: Date.now() });
-          if (pathname === `/page/${page.id}`) router.push('/');
-          showToast('Page moved to trash');
-        }
-      });
-    } else if (action === 'restore') {
-      await updateDoc(doc(db, 'users', user.uid, 'pages', page.id), { deletedAt: null });
-      showToast('Page restored');
-    } else if (action === 'permanent-delete') {
-      customConfirm({
-        title: 'Permanently Delete?',
-        message: `Are you sure you want to permanently delete "${page.title}"? This cannot be undone.`,
-        confirmLabel: 'Delete Forever',
         onConfirm: async () => {
           await deleteDoc(doc(db, 'users', user.uid, 'pages', page.id));
           if (pathname === `/page/${page.id}`) router.push('/');
-          showToast('Page deleted permanently');
+          showToast('Page moved to trash');
         }
       });
     } else if (action === 'copy-link') {
@@ -165,9 +138,6 @@ export function Sidebar() {
 
   if (!user) return null;
 
-  const activePages = pages.filter(p => !p.deletedAt);
-  const trashedPages = pages.filter(p => !!p.deletedAt);
-
   return (
     <>
       <aside className="w-full md:w-64 border-r border-[#2d2d2d] bg-[#121212] md:bg-[#252526] flex flex-col shrink-0 justify-between h-full relative">
@@ -178,13 +148,13 @@ export function Sidebar() {
           </div>
           
           <div className="p-2 flex-1 overflow-y-auto">
-            {activePages.filter(p => p.isFavorite).length > 0 && (
+            {pages.filter(p => p.isFavorite).length > 0 && (
               <div className="mb-4">
                 <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-2 hover:bg-[#2a2a2b] py-1 rounded cursor-pointer transition-colors duration-200 w-fit">
                   Favorites
                 </div>
                 <nav className="flex flex-col gap-[2px]">
-                  {activePages.filter(p => p.isFavorite).map(page => (
+                  {pages.filter(p => p.isFavorite).map(page => (
                     <div 
                       key={page.id} 
                       className={`group relative flex items-center justify-between rounded-md transition-colors cursor-pointer ${
@@ -224,53 +194,14 @@ export function Sidebar() {
                     <span className="truncate text-sm text-gray-200 font-medium">Calendar</span>
                   </div>
                 </Link>
-                <button 
-                  onClick={() => setIsTrashOpen(!isTrashOpen)}
-                  className={`group relative flex items-center justify-between rounded-md transition-colors cursor-pointer px-3 py-1.5 ${
-                    isTrashOpen ? 'bg-[#37373d]' : 'hover:bg-[#2a2a2b]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Trash2 size={16} className="text-gray-400 shrink-0" />
-                    <span className="truncate text-sm text-gray-200 font-medium">Trash</span>
-                  </div>
-                </button>
               </nav>
             </div>
-
-            {isTrashOpen && trashedPages.length > 0 && (
-              <div className="mb-6 bg-[#1a1a1a] rounded-lg p-1 border border-[#333]">
-                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 px-2 py-1">
-                  Deleted Pages (30 Days)
-                </div>
-                <nav className="flex flex-col gap-[2px] max-h-[150px] overflow-y-auto custom-scrollbar">
-                  {trashedPages.map(page => (
-                    <div 
-                      key={page.id} 
-                      className="group relative flex items-center justify-between rounded-md transition-colors cursor-pointer hover:bg-[#2a2a2b] opacity-70 hover:opacity-100"
-                      onContextMenu={(e) => handleContextMenu(e, page)}
-                    >
-                      <div className="flex items-center gap-2 px-3 py-1.5 flex-1 min-w-0">
-                        {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={16} className="text-gray-400 shrink-0" />}
-                        <span className="truncate text-sm text-gray-300 font-medium line-through">{page.title}</span>
-                      </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleContextMenu(e, page); }}
-                        className="shrink-0 p-1 mr-1 text-gray-500 hover:bg-[#454545] rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreHorizontal size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </nav>
-              </div>
-            )}
             
             <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-2 hover:bg-[#2a2a2b] py-1 rounded cursor-pointer transition-colors duration-200 w-fit">
               Recents
             </div>
             <nav className="flex flex-col gap-[2px]">
-              {activePages.map(page => (
+              {pages.map(page => (
                 <div 
                   key={page.id} 
                   className={`group relative flex items-center justify-between rounded-md transition-colors cursor-pointer ${
@@ -351,7 +282,7 @@ export function Sidebar() {
                    <ChevronDown size={16} />
                  </div>
                  <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x -mx-4 px-4">
-                   {activePages.map(page => (
+                   {pages.map(page => (
                      <Link 
                        key={`mobile-recent-${page.id}`} 
                        href={`/page/${page.id}`}
@@ -377,7 +308,7 @@ export function Sidebar() {
                    <MoreHorizontal size={16} />
                  </div>
                  <div className="flex flex-col gap-1">
-                    {activePages.map(page => (
+                    {pages.map(page => (
                        <Link 
                          key={`mobile-private-${page.id}`} 
                          href={`/page/${page.id}`}
@@ -420,66 +351,51 @@ export function Sidebar() {
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
-          {contextMenu.page.deletedAt ? (
-            <>
-              <div className="px-3 py-1 text-xs text-gray-400 font-medium tracking-wide">Trash Options</div>
-              <button onClick={() => handleOptionAction('restore', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left text-green-400">
-                Restore Page
-              </button>
-              <div className="my-1 border-t border-[#444] w-full" />
-              <button onClick={() => handleOptionAction('permanent-delete', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left text-red-400">
-                <Trash2 size={14} /> Permanently Delete
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="px-3 py-1 text-xs text-gray-400 font-medium tracking-wide">Database</div>
-              
-              <button onClick={() => handleOptionAction('favorite', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
-                <Star size={14} className={contextMenu.page.isFavorite ? "text-yellow-400 fill-yellow-400" : "text-gray-400"}/> 
-                {contextMenu.page.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
-              </button>
-              
-              <div className="my-1 border-t border-[#444] w-full" />
-              
-              <button onClick={() => handleOptionAction('copy-link', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
-                <Link2 size={14} className="text-gray-400"/> Copy link
-              </button>
-              
-              <button onClick={() => handleOptionAction('duplicate', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left group">
-                <Copy size={14} className="text-gray-400"/>
-                <span className="flex-1">Duplicate</span>
-                <ChevronRight size={14} className="text-gray-500 group-hover:text-gray-300" />
-              </button>
-              
-              <button onClick={() => handleOptionAction('rename', contextMenu.page)} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
-                <div className="flex items-center gap-3">
-                  <Edit2 size={14} className="text-gray-400"/> Rename
-                </div>
-                <span className="text-xs text-gray-500">Ctrl+Shift+R</span>
-              </button>
-              
-              <button onClick={() => handleOptionAction('trash', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
-                <Trash2 size={14} className="text-gray-400"/> Move to Trash
-              </button>
+          <div className="px-3 py-1 text-xs text-gray-400 font-medium tracking-wide">Database</div>
+          
+          <button onClick={() => handleOptionAction('favorite', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
+            <Star size={14} className={contextMenu.page.isFavorite ? "text-yellow-400 fill-yellow-400" : "text-gray-400"}/> 
+            {contextMenu.page.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+          </button>
+          
+          <div className="my-1 border-t border-[#444] w-full" />
+          
+          <button onClick={() => handleOptionAction('copy-link', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
+            <Link2 size={14} className="text-gray-400"/> Copy link
+          </button>
+          
+          <button onClick={() => handleOptionAction('duplicate', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left group">
+            <Copy size={14} className="text-gray-400"/>
+            <span className="flex-1">Duplicate</span>
+            <ChevronRight size={14} className="text-gray-500 group-hover:text-gray-300" />
+          </button>
+          
+          <button onClick={() => handleOptionAction('rename', contextMenu.page)} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
+            <div className="flex items-center gap-3">
+              <Edit2 size={14} className="text-gray-400"/> Rename
+            </div>
+            <span className="text-xs text-gray-500">Ctrl+Shift+R</span>
+          </button>
+          
+          <button onClick={() => handleOptionAction('trash', contextMenu.page)} className="w-full flex items-center gap-3 px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
+            <Trash2 size={14} className="text-gray-400"/> Move to Trash
+          </button>
 
-              <div className="my-1 border-t border-[#444] w-full" />
+          <div className="my-1 border-t border-[#444] w-full" />
 
-              <button onClick={() => handleOptionAction('new-tab', contextMenu.page)} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
-                <div className="flex items-center gap-3">
-                  <ExternalLink size={14} className="text-gray-400"/> Open in new tab
-                </div>
-                <span className="text-xs text-gray-500">Ctrl+Enter</span>
-              </button>
-              
-              <button onClick={() => handleOptionAction('side-peek', contextMenu.page)} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
-                <div className="flex items-center gap-3">
-                  <Columns size={14} className="text-gray-400"/> Open in side peek
-                </div>
-                <span className="text-xs text-gray-500">Alt+Click</span>
-              </button>
-            </>
-          )}
+          <button onClick={() => handleOptionAction('new-tab', contextMenu.page)} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
+             <div className="flex items-center gap-3">
+               <ExternalLink size={14} className="text-gray-400"/> Open in new tab
+             </div>
+             <span className="text-xs text-gray-500">Ctrl+Enter</span>
+          </button>
+          
+          <button onClick={() => handleOptionAction('side-peek', contextMenu.page)} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#454550] transition-colors text-left">
+             <div className="flex items-center gap-3">
+               <Columns size={14} className="text-gray-400"/> Open in side peek
+             </div>
+             <span className="text-xs text-gray-500">Alt+Click</span>
+          </button>
         </div>
       )}
     </>
