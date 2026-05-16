@@ -6,11 +6,11 @@ import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { HabitStats, InventoryItem } from '@/types';
 import { Shield, Clock, Timer, Banknote, Plus, Minus, ArrowRight, Play } from 'lucide-react';
-import { showToast } from '@/components/ui/Toast';
-import { customConfirm } from '@/components/ui/Modals';
+import { useNotification } from '@/context/NotificationContext';
 
 export function GamificationDashboard({ pageId }: { pageId: string }) {
   const { user } = useAuth();
+  const { showToast, confirm: customConfirm } = useNotification();
   const [stats, setStats] = useState<HabitStats | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [activeTimer, setActiveTimer] = useState<number | null>(null);
