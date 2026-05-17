@@ -59,6 +59,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set());
   const [counterFormat, setCounterFormat] = useState<'fraction' | 'percent'>('fraction');
   const [textSize, setTextSize] = useState<TextSize>('small');
+  const [textTruncateMode, setTextTruncateMode] = useState<'wrap' | 'truncate'>('wrap');
   const [pageMeta, setPageMeta] = useState<PageModel | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   
@@ -93,6 +94,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (savedSize) setTextSize(savedSize as TextSize);
     const savedFormat = localStorage.getItem(`habits_counter_format_${pageId}`);
     if (savedFormat) setCounterFormat(savedFormat as 'fraction' | 'percent');
+    const savedTruncate = localStorage.getItem(`habits_truncate_mode_${pageId}`);
+    if (savedTruncate) setTextTruncateMode(savedTruncate as 'wrap' | 'truncate');
     setIsLoaded(true);
   }, [pageId]);
 
@@ -105,6 +108,11 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (!isLoaded) return;
     localStorage.setItem(`habits_counter_format_${pageId}`, counterFormat);
   }, [counterFormat, pageId, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    localStorage.setItem(`habits_truncate_mode_${pageId}`, textTruncateMode);
+  }, [textTruncateMode, pageId, isLoaded]);
 
   useEffect(() => {
     if (!user || !pageId) return;
@@ -861,6 +869,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <button onClick={() => setTextSize('large')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all ${textSize === 'large' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A++</button>
                     </div>
                   </div>
+                  <div className="space-y-3">
+                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Long Tasks Display</span>
+                    <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
+                      <button onClick={() => setTextTruncateMode('wrap')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${textTruncateMode === 'wrap' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Wrap</button>
+                      <button onClick={() => setTextTruncateMode('truncate')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${textTruncateMode === 'truncate' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Truncate</button>
+                    </div>
+                  </div>
                   <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">All Habits Daily Bonus</span>
                     <div className="flex flex-col gap-1.5">
@@ -940,8 +955,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                 onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
                                 isEditing={editingTaskId === task.id} 
                                 onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
-                                textSizeClass={textSize === 'large' ? 'text-base' : textSize === 'medium' ? 'text-sm' : 'text-[13px]'} 
-                                checkboxScale="scale-[1.1]" 
+                                textSizeClass={textSize === 'large' ? 'text-[19px]' : textSize === 'medium' ? 'text-[17px]' : 'text-[15px]'} 
+                                checkboxScale="scale-[1.15]" 
+                                textTruncateMode={textTruncateMode}
                               />
                           ))}
                         </div>
@@ -1050,16 +1066,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                       isPeek={false}
                                       streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                       onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
-                                      onToggleSubTask={async (subId: string, current: boolean) => {
-                                        if (!user) return;
-                                        const key = `${task.id}_${subId}`;
-                                        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'records', record.id), { [`data.${key}`]: !current });
-                                      }}
+                                      onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
                                       onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
                                       isEditing={editingTaskId === task.id} 
                                       onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
                                       textSizeClass={getTextClasses()} 
                                       checkboxScale={getCheckboxScale()} 
+                                      textTruncateMode={textTruncateMode}
                                     />
                                   ))}
                                 </SortableContext>
@@ -1388,17 +1401,54 @@ function DatePickerModal({ isOpen, onClose, onSelect, initialDate }: any) {
   );
 }
 
-function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, recordData, isPeek, streak = 0, onContextMenu, isEditing, onRename, textSizeClass, checkboxScale }: any) {
+function SortableMasterItem({ 
+  id, 
+  task, 
+  completed, 
+  onToggle, 
+  onToggleSubTask, 
+  recordData, 
+  isPeek, 
+  streak = 0, 
+  onContextMenu, 
+  isEditing, 
+  onRename, 
+  textSizeClass, 
+  checkboxScale,
+  textTruncateMode = 'wrap'
+}: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !isPeek });
   const style = isPeek ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 } : {};
   const [tempName, setTempName] = useState(task.name);
-  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Persist expanded state in local storage keyed by task.id
+  const [isExpanded, setIsExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`subtasks_expanded_${task.id}`);
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  const toggleExpanded = () => {
+    const nextState = !isExpanded;
+    setIsExpanded(nextState);
+    localStorage.setItem(`subtasks_expanded_${task.id}`, String(nextState));
+  };
+
   const inputRef = useRef<HTMLInputElement>(null);
   
   useEffect(() => { if (isEditing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [isEditing]);
   if (task.type !== 'habit') return null;
   
   const hasSubtasks = task.subTasks && task.subTasks.length > 0;
+
+  // Proportional sizing for subtasks inside the side peek vs main cards list
+  const subTextSizeClass = isPeek
+    ? (textSizeClass.includes('text-[19px]') ? 'text-[15px]' : textSizeClass.includes('text-[17px]') ? 'text-[14px]' : 'text-[13px]')
+    : 'text-[12px]';
+
+  const subCheckboxScale = isPeek ? 'scale-[0.85]' : 'scale-[0.8]';
 
   return (
     <div ref={isPeek ? setNodeRef : null} style={style} className="flex flex-col mb-1 group/item">
@@ -1409,13 +1459,13 @@ function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, re
           </div>
         )}
         
-        {isPeek && hasSubtasks ? (
-          <button onClick={() => setIsExpanded(!isExpanded)} className="text-gray-500 hover:text-gray-300 transition-colors">
+        {hasSubtasks ? (
+          <button onClick={toggleExpanded} className="text-gray-500 hover:text-gray-300 transition-colors shrink-0">
             <ChevronRight size={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           </button>
-        ) : isPeek ? (
-          <div className="w-[14px]" /> // Spacer
-        ) : null}
+        ) : (
+          <div className="w-[14px] shrink-0" /> // Perfect Alignment Spacer
+        )}
 
         <div className={`${checkboxScale} origin-left shrink-0`} onClick={(e) => e.stopPropagation()}>
           <Checkbox checked={completed} onClick={onToggle} />
@@ -1425,7 +1475,11 @@ function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, re
           <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
         ) : (
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <span className={`font-medium whitespace-normal break-words tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
+            <span className={`font-medium tracking-tight transition-all ${
+              completed ? 'text-gray-700 line-through' : 'text-gray-400'
+            } ${
+              textTruncateMode === 'truncate' ? 'truncate whitespace-nowrap overflow-hidden block w-full text-left' : 'whitespace-normal break-words text-left'
+            } ${textSizeClass}`}>{task.name}</span>
             {streak > 0 && (
               <span className="text-[10px] text-amber-500 font-bold shrink-0 flex items-center gap-0.5 bg-amber-500/10 px-1.5 py-0.2 rounded hover:bg-amber-500/20 transition-all select-none">
                 🔥 {streak}
@@ -1435,17 +1489,21 @@ function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, re
         )}
       </div>
 
-      {isPeek && isExpanded && hasSubtasks && (
+      {isExpanded && hasSubtasks && (
         <div className="ml-8 pl-2 border-l-2 border-[#1a1a1a] mt-1 space-y-1">
           {task.subTasks.map((sub: any) => {
             const subKey = `${task.id}_${sub.id}`;
             const subCompleted = !!recordData?.[subKey];
             return (
-              <div key={sub.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#1a1a1a] transition-colors">
-                <div className="scale-[0.8] origin-left">
+              <div key={sub.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#1a1a1a] transition-colors min-w-0">
+                <div className={`${subCheckboxScale} origin-left shrink-0`}>
                   <Checkbox checked={subCompleted} onClick={() => onToggleSubTask(sub.id, subCompleted)} />
                 </div>
-                <span className={`text-[12px] transition-colors ${subCompleted ? 'text-gray-600 line-through' : 'text-gray-400'}`}>
+                <span className={`transition-colors flex-1 min-w-0 text-left ${
+                  subCompleted ? 'text-gray-600 line-through' : 'text-gray-400'
+                } ${
+                  textTruncateMode === 'truncate' ? 'truncate whitespace-nowrap overflow-hidden block' : 'whitespace-normal break-words'
+                } ${subTextSizeClass}`}>
                   {sub.title}
                 </span>
               </div>
