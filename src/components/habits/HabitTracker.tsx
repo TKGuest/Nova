@@ -640,7 +640,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         <div className={`flex-1 ${isPeek ? 'overflow-auto' : ''} custom-scrollbar overscroll-contain touch-pan-y`}>
           {isGamificationOpen ? (
             <div className="p-4 bg-[#111] rounded-xl border border-purple-900/30 min-h-[400px]">
-               <GamificationDashboard pageId={pageId} />
+               <GamificationDashboard pageId={pageId} onOpenShop={() => setIsShopOpen(true)} />
             </div>
           ) : isPeek && sidePeekRecordId ? (
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
