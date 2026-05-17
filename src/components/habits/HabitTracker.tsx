@@ -30,7 +30,7 @@ interface MasterTask {
   // Gamification & Sub-tasks
   pointsValue?: number;
   isBadHabit?: boolean;
-  subTasks?: { id: string; title: string }[];
+  subTasks?: { id: string; title: string; points?: number }[];
   autoTickMode?: 'any' | 'all' | 'manual';
   rewardMode?: 'main_only' | 'subtasks_separately';
   subTaskPoints?: number;
@@ -177,6 +177,17 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       window.removeEventListener('click', handleClick);
     };
   }, [user, pageId]);
+
+  // Disable browser scroll-wheel changing of active number inputs globally
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (document.activeElement && (document.activeElement as HTMLInputElement).type === 'number') {
+        (document.activeElement as HTMLInputElement).blur();
+      }
+    };
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    return () => document.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Auto-create today's record and process daily logic
   useEffect(() => {
@@ -506,7 +517,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     
     // A. Reward Mode points for this sub-task
     if (task.rewardMode === 'subtasks_separately') {
-      const subTaskBase = task.subTaskPoints ?? 2;
+      const subTaskObj = task.subTasks?.find(s => s.id === subId);
+      const subTaskBase = subTaskObj?.points ?? 2;
       const subTaskPointsChange = Math.round(subTaskBase * multiplier);
       pointsGained += isCompleted ? subTaskPointsChange : -subTaskPointsChange;
     }
@@ -864,6 +876,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
                             await updateDoc(statsRef, { allHabitsBonus: nextVal });
                           }}
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                       </div>
                       <span className="text-[9px] text-gray-600 leading-normal block">Earned when all daily main habits are successfully completed.</span>
@@ -1489,24 +1502,10 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
                 className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
                 defaultValue={task.pointsValue || 10}
                 onBlur={(e) => onUpdate(task.id, { pointsValue: parseInt(e.target.value) || 10 })}
+                onWheel={(e) => e.currentTarget.blur()}
               />
             </div>
             
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Auto-Tick Completion</span>
-              <select
-                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
-                value={task.autoTickMode || 'manual'}
-                onChange={(e) => onUpdate(task.id, { autoTickMode: e.target.value })}
-              >
-                <option value="manual">Manual Toggle Only</option>
-                <option value="any">Complete when ANY sub-task is completed</option>
-                <option value="all">Complete when ALL sub-tasks are completed</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-[#2d2d2d]/50 pt-3">
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Reward Mode</span>
               <select
@@ -1518,42 +1517,49 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
                 <option value="subtasks_separately">Reward Sub-Tasks Separately</option>
               </select>
             </div>
-
-            {task.rewardMode === 'subtasks_separately' && (
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Points per Sub-Task</span>
-                <input 
-                  type="number" 
-                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
-                  defaultValue={task.subTaskPoints ?? 2}
-                  onBlur={(e) => onUpdate(task.id, { subTaskPoints: parseInt(e.target.value) ?? 2 })}
-                />
-              </div>
-            )}
           </div>
 
-          {task.rewardMode !== 'subtasks_separately' && (
-            <div className="flex flex-col gap-1 border-t border-[#2d2d2d]/50 pt-3">
-              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Bonus Points (All Sub-Tasks Complete)</span>
-              <input 
-                type="number" 
-                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
-                defaultValue={task.bonusPoints ?? 5}
-                onBlur={(e) => onUpdate(task.id, { bonusPoints: parseInt(e.target.value) ?? 5 })}
-              />
-            </div>
-          )}
+          <div className="flex flex-col gap-1 border-t border-[#2d2d2d]/50 pt-3">
+            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Sub-Task Completion Rule</span>
+            <select
+              className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+              value={task.autoTickMode || 'manual'}
+              onChange={(e) => onUpdate(task.id, { autoTickMode: e.target.value })}
+            >
+              <option value="manual">Manual Check Only</option>
+              <option value="any">Auto-Complete when ANY sub-task is completed</option>
+              <option value="all">Auto-Complete when ALL sub-tasks are completed</option>
+            </select>
+          </div>
           
           <div className="space-y-1.5 border-t border-[#2d2d2d]/50 pt-3">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Sub-Tasks List</span>
             <div className="space-y-1.5 mt-1 max-h-40 overflow-y-auto custom-scrollbar">
               {(task.subTasks || []).map((sub: any) => (
-                <div key={sub.id} className="flex items-center gap-2 px-3 py-2 bg-[#111] rounded border border-[#2d2d2d] hover:border-[#333] transition-colors">
+                <div key={sub.id} className="flex items-center gap-3 px-3 py-2 bg-[#111] rounded border border-[#2d2d2d] hover:border-[#333] transition-colors">
                   <span className="text-[12.5px] font-medium text-gray-200 flex-1">{sub.title}</span>
+                  
+                  {task.rewardMode === 'subtasks_separately' && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[9.5px] text-gray-500 font-black uppercase tracking-wider">Points</span>
+                      <input 
+                        type="number"
+                        className="w-14 bg-[#1a1a1a] border border-[#2d2d2d] rounded px-1.5 py-0.5 text-center text-[12px] font-bold text-purple-400 outline-none focus:border-purple-500 transition-colors"
+                        defaultValue={sub.points ?? 2}
+                        onBlur={(e) => {
+                          const pointsVal = parseInt(e.target.value) || 0;
+                          const newSubs = task.subTasks!.map(s => s.id === sub.id ? { ...s, points: pointsVal } : s);
+                          onUpdate(task.id, { subTasks: newSubs });
+                        }}
+                        onWheel={(e) => e.currentTarget.blur()}
+                      />
+                    </div>
+                  )}
+
                   <button onClick={() => {
                     const newSubs = task.subTasks!.filter(s => s.id !== sub.id);
                     onUpdate(task.id, { subTasks: newSubs });
-                  }} className="text-gray-500 hover:text-red-500 p-0.5"><Trash2 size={13}/></button>
+                  }} className="text-gray-500 hover:text-red-500 p-0.5 shrink-0"><Trash2 size={13}/></button>
                 </div>
               ))}
               {(task.subTasks || []).length === 0 && (
@@ -1570,7 +1576,7 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newSubTask.trim()) {
                     const subId = Date.now().toString();
-                    const newSubs = [...(task.subTasks || []), { id: subId, title: newSubTask.trim() }];
+                    const newSubs = [...(task.subTasks || []), { id: subId, title: newSubTask.trim(), points: 2 }];
                     onUpdate(task.id, { subTasks: newSubs });
                     setNewSubTask('');
                   }
