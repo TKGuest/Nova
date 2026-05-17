@@ -60,6 +60,7 @@ export interface HabitStats {
   pointsEarnedToday?: number; // Inflation control cap
   lastPointGainDate?: string; 
   equippedBuffs: { itemId: string; name: string; expiresAt: number }[];
+  taskStreaks?: Record<string, { streak: number, multiplier: number, lastCompletedDate?: string }>;
 }
 
 export interface InventoryItem {
@@ -69,6 +70,15 @@ export interface InventoryItem {
   quantity: number;
   costPurchased: number; // for compound cost calculation
   customText?: string;
+}
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  type: 'buff' | 'timer' | 'note' | 'instant';
+  durationHours?: number;
 }
 
 export interface SubTask {

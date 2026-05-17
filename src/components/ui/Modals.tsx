@@ -93,3 +93,70 @@ export function ConfirmDialog({
     </Modal>
   );
 }
+
+interface InputDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (value: string) => void;
+  title: string;
+  message: string;
+  placeholder?: string;
+  submitLabel?: string;
+  type?: string;
+}
+
+export function InputDialog({
+  isOpen,
+  onClose,
+  onSubmit,
+  title,
+  message,
+  placeholder = '',
+  submitLabel = 'Submit',
+  type = 'text'
+}: InputDialogProps) {
+  const [value, setValue] = React.useState('');
+
+  React.useEffect(() => {
+    if (isOpen) setValue('');
+  }, [isOpen]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!value.trim()) return;
+    onSubmit(value);
+    onClose();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <p className="text-sm text-gray-400 leading-relaxed">{message}</p>
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          autoFocus
+          className="w-full bg-[#111] border border-[#3e3e3e] rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+        />
+        <div className="flex items-center justify-end gap-2 mt-2">
+          <button 
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-gray-400 hover:text-gray-200 hover:bg-[#37373d] rounded-md transition-all"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit"
+            disabled={!value.trim()}
+            className="px-4 py-2 text-xs font-medium text-white bg-[#2383e2] hover:bg-opacity-90 rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitLabel}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
