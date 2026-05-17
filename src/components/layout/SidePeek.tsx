@@ -124,7 +124,7 @@ export function SidePeek() {
       </div>
       
       {/* Editor Content Area */}
-      <div className={`flex-1 overflow-y-auto w-full relative bg-background cursor-auto flex flex-col ${pageData?.type === 'habit' && sidePeekRecordId ? 'p-0' : 'p-8 lg:px-12'}`}>
+      <div className={`flex-1 overflow-y-auto w-full relative bg-background cursor-auto flex flex-col overscroll-contain touch-pan-y ${pageData?.type === 'habit' && sidePeekRecordId ? 'p-0' : 'p-8 lg:px-12'}`}>
          {pageData && (
            <>
               {!(pageData.type === 'habit' && sidePeekRecordId) && (
