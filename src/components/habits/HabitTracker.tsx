@@ -93,12 +93,29 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   useEffect(() => {
     const isModalOpen = !!sidePeekRecordId || isShopOpen || isPropertyModalOpen || isDefaultCoverModalOpen || isDatePickerOpen !== null || newItemModal || !!editingItem;
     if (isModalOpen) {
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
     } else {
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
       document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
     }
     return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
       document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
     };
   }, [sidePeekRecordId, isShopOpen, isPropertyModalOpen, isDefaultCoverModalOpen, isDatePickerOpen, newItemModal, editingItem]);
 
@@ -1273,7 +1290,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar overscroll-contain touch-pan-y">
               {isEditMode && (
                 <button 
                   onClick={() => setNewItemModal(true)} 
