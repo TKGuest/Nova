@@ -79,6 +79,8 @@ export interface InventoryItem {
   costPurchased: number; // for compound cost calculation
   customText?: string;
   durationHours?: number;
+  durationValue?: number;
+  durationUnit?: 'minutes' | 'hours';
 }
 
 export interface ShopItem {
@@ -88,6 +90,8 @@ export interface ShopItem {
   cost: number;
   type: 'buff' | 'timer' | 'note' | 'instant';
   durationHours?: number;
+  durationValue?: number;
+  durationUnit?: 'minutes' | 'hours';
 }
 
 export interface SubTask {
