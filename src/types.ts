@@ -68,6 +68,7 @@ export interface HabitStats {
   lastPointGainDate?: string; 
   equippedBuffs: EquippedBuff[];
   taskStreaks?: Record<string, { streak: number, multiplier: number, lastCompletedDate?: string }>;
+  allHabitsBonus?: number;
 }
 
 export interface InventoryItem {

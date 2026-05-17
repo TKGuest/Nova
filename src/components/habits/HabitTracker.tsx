@@ -31,6 +31,10 @@ interface MasterTask {
   pointsValue?: number;
   isBadHabit?: boolean;
   subTasks?: { id: string; title: string }[];
+  autoTickMode?: 'any' | 'all' | 'manual';
+  rewardMode?: 'main_only' | 'subtasks_separately';
+  subTaskPoints?: number;
+  bonusPoints?: number;
 }
 
 interface PageRecord {
@@ -38,6 +42,7 @@ interface PageRecord {
   date: string;
   data: Record<string, boolean>;
   notes?: string;
+  allHabitsBonusAwarded?: boolean;
   coverImage?: {
     url: string;
     type: 'preset' | 'upload';
@@ -336,10 +341,47 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', newId), { ...task, id: newId, name: `${task.name} (Copy)`, sortOrder });
   };
 
+  const evaluateAllHabitsBonus = (
+    recordId: string,
+    recordData: Record<string, boolean>,
+    currentPoints: number,
+    stats: any,
+    todayStr: string
+  ) => {
+    const activeHabits = masterTasks.filter(t => t.type === 'habit');
+    if (activeHabits.length === 0) return { points: currentPoints, bonusAwarded: false };
+    
+    const allCompleted = activeHabits.every(t => !!recordData[t.id]);
+    const bonusPointsAmount = stats.allHabitsBonus ?? 50;
+    
+    const record = records.find(r => r.id === recordId);
+    const wasBonusAwarded = !!record?.allHabitsBonusAwarded;
+    
+    let finalPoints = currentPoints;
+    let nextBonusAwarded = wasBonusAwarded;
+    
+    if (allCompleted && !wasBonusAwarded) {
+      finalPoints += bonusPointsAmount;
+      nextBonusAwarded = true;
+    } else if (!allCompleted && wasBonusAwarded) {
+      finalPoints -= bonusPointsAmount;
+      nextBonusAwarded = false;
+    }
+    
+    return { points: finalPoints, bonusAwarded: nextBonusAwarded };
+  };
+
   const toggleCompletion = async (recordId: string, taskId: string, current: boolean) => {
     if (!user) return;
     const isCompleted = !current;
-    await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId), { [`data.${taskId}`]: isCompleted });
+    
+    const recordRef = doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId);
+    const recordSnap = await getDoc(recordRef);
+    if (!recordSnap.exists()) return;
+    
+    const record = recordSnap.data();
+    const recordData = record?.data || {};
+    const nextRecordData = { ...recordData, [taskId]: isCompleted };
     
     // Gamification Hook
     try {
@@ -375,7 +417,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           if (newLastCompletedDate === todayStr) {
             newStreak = Math.max(0, newStreak - 1);
             newMultiplier = Math.max(1.0, newMultiplier - 0.01);
-            newLastCompletedDate = yesterdayStr; // Allow re-complete today
+            newLastCompletedDate = yesterdayStr;
           }
         }
 
@@ -411,17 +453,198 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           pointsEarnedToday = Math.max(0, pointsEarnedToday - pointsChange);
         }
         
+        // Check Completed All Habits Daily Bonus
+        const { points: finalPoints, bonusAwarded } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
+        
+        await updateDoc(recordRef, { 
+          data: nextRecordData,
+          allHabitsBonusAwarded: bonusAwarded
+        });
+        
         await updateDoc(statsRef, { 
-          points: newPoints,
+          points: finalPoints,
           pointsEarnedToday,
           lastPointGainDate: todayStr,
-          debt: newPoints < 0,
+          debt: finalPoints < 0,
           taskStreaks
         });
       }
     } catch (err) {
       console.warn("Gamification error:", err);
     }
+  };
+
+  const toggleSubTask = async (recordId: string, taskId: string, subId: string, current: boolean) => {
+    if (!user) return;
+    
+    const isCompleted = !current;
+    const recordRef = doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId);
+    const recordSnap = await getDoc(recordRef);
+    if (!recordSnap.exists()) return;
+    
+    const record = recordSnap.data();
+    const recordData = record?.data || {};
+    const subKey = `${taskId}_${subId}`;
+    
+    // 1. Update the record sub-task completion value
+    const nextRecordData = { ...recordData, [subKey]: isCompleted };
+    
+    // 2. Fetch current stats
+    const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+    const statsSnap = await getDoc(statsRef);
+    if (!statsSnap.exists()) return;
+    const stats = statsSnap.data() as any;
+    
+    const task = masterTasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const taskStreaks = stats.taskStreaks || {};
+    const currentTaskStreak = taskStreaks[taskId] || { streak: 0, multiplier: 1.0, lastCompletedDate: '' };
+    const multiplier = currentTaskStreak.multiplier || 1.0;
+    
+    let pointsGained = 0;
+    
+    // A. Reward Mode points for this sub-task
+    if (task.rewardMode === 'subtasks_separately') {
+      const subTaskBase = task.subTaskPoints ?? 2;
+      const subTaskPointsChange = Math.round(subTaskBase * multiplier);
+      pointsGained += isCompleted ? subTaskPointsChange : -subTaskPointsChange;
+    }
+    
+    // B. 100% Sub-tasks Completed Bonus
+    if (task.subTasks && task.subTasks.length > 0) {
+      const totalSubs = task.subTasks.length;
+      const prevCompletedCount = task.subTasks.filter(s => !!recordData[`${taskId}_${s.id}`]).length;
+      const nextCompletedCount = task.subTasks.filter(s => !!nextRecordData[`${taskId}_${s.id}`]).length;
+      
+      const wasAllComplete = prevCompletedCount === totalSubs;
+      const isAllComplete = nextCompletedCount === totalSubs;
+      
+      if (isAllComplete && !wasAllComplete) {
+        const bonusBase = task.bonusPoints ?? 5;
+        pointsGained += Math.round(bonusBase * multiplier);
+      } else if (!isAllComplete && wasAllComplete) {
+        const bonusBase = task.bonusPoints ?? 5;
+        pointsGained -= Math.round(bonusBase * multiplier);
+      }
+      
+      // C. Auto-Tick Main Task
+      if (task.autoTickMode === 'any') {
+        const nextShouldBeComplete = nextCompletedCount > 0;
+        const currentMainComplete = !!recordData[taskId];
+        
+        if (nextShouldBeComplete !== currentMainComplete) {
+          nextRecordData[taskId] = nextShouldBeComplete;
+          const basePoints = task.pointsValue || 10;
+          const mainPointsChange = Math.round(basePoints * multiplier);
+          pointsGained += nextShouldBeComplete ? mainPointsChange : -mainPointsChange;
+          
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+          let newStreak = currentTaskStreak.streak;
+          let newMultiplier = currentTaskStreak.multiplier;
+          let newLastCompletedDate = currentTaskStreak.lastCompletedDate || '';
+          
+          if (nextShouldBeComplete) {
+            if (newLastCompletedDate === yesterdayStr) {
+              newStreak += 1;
+              newMultiplier = Math.min(1.5, newMultiplier + 0.01);
+            } else if (newLastCompletedDate === todayStr) {
+              // Already completed today
+            } else {
+              newStreak = 1;
+              newMultiplier = 1.01;
+            }
+            newLastCompletedDate = todayStr;
+          } else {
+            if (newLastCompletedDate === todayStr) {
+              newStreak = Math.max(0, newStreak - 1);
+              newMultiplier = Math.max(1.0, newMultiplier - 0.01);
+              newLastCompletedDate = yesterdayStr;
+            }
+          }
+          taskStreaks[taskId] = {
+            streak: newStreak,
+            multiplier: parseFloat(newMultiplier.toFixed(2)),
+            lastCompletedDate: newLastCompletedDate
+          };
+        }
+      } else if (task.autoTickMode === 'all') {
+        const nextShouldBeComplete = nextCompletedCount === totalSubs;
+        const currentMainComplete = !!recordData[taskId];
+        
+        if (nextShouldBeComplete !== currentMainComplete) {
+          nextRecordData[taskId] = nextShouldBeComplete;
+          const basePoints = task.pointsValue || 10;
+          const mainPointsChange = Math.round(basePoints * multiplier);
+          pointsGained += nextShouldBeComplete ? mainPointsChange : -mainPointsChange;
+          
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+          let newStreak = currentTaskStreak.streak;
+          let newMultiplier = currentTaskStreak.multiplier;
+          let newLastCompletedDate = currentTaskStreak.lastCompletedDate || '';
+          
+          if (nextShouldBeComplete) {
+            if (newLastCompletedDate === yesterdayStr) {
+              newStreak += 1;
+              newMultiplier = Math.min(1.5, newMultiplier + 0.01);
+            } else if (newLastCompletedDate === todayStr) {
+              // Already completed today
+            } else {
+              newStreak = 1;
+              newMultiplier = 1.01;
+            }
+            newLastCompletedDate = todayStr;
+          } else {
+            if (newLastCompletedDate === todayStr) {
+              newStreak = Math.max(0, newStreak - 1);
+              newMultiplier = Math.max(1.0, newMultiplier - 0.01);
+              newLastCompletedDate = yesterdayStr;
+            }
+          }
+          taskStreaks[taskId] = {
+            streak: newStreak,
+            multiplier: parseFloat(newMultiplier.toFixed(2)),
+            lastCompletedDate: newLastCompletedDate
+          };
+        }
+      }
+    }
+    
+    // 3. Write points update with DAILY CAP check
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    let newPoints = stats.points;
+    let pointsEarnedToday = stats.pointsEarnedToday || 0;
+    if (stats.lastPointGainDate !== todayStr) {
+      pointsEarnedToday = 0;
+    }
+    const DAILY_CAP = 200;
+    let actualGain = pointsGained;
+    if (pointsGained > 0) {
+      if (pointsEarnedToday + pointsGained > DAILY_CAP) {
+        actualGain = Math.max(0, DAILY_CAP - pointsEarnedToday);
+      }
+    }
+    newPoints += actualGain;
+    pointsEarnedToday = Math.max(0, pointsEarnedToday + actualGain);
+    
+    // Check Completed All Habits Daily Bonus
+    const { points: finalPoints, bonusAwarded } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
+    
+    // Save all updates to Firestore
+    await updateDoc(recordRef, { 
+      data: nextRecordData,
+      allHabitsBonusAwarded: bonusAwarded
+    });
+    
+    await updateDoc(statsRef, {
+      points: finalPoints,
+      pointsEarnedToday,
+      lastPointGainDate: todayStr,
+      debt: finalPoints < 0,
+      taskStreaks
+    });
   };
 
   const handleDragEnd = async (event: any) => {
@@ -626,6 +849,26 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <button onClick={() => setTextSize('large')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all ${textSize === 'large' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A++</button>
                     </div>
                   </div>
+                  <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
+                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">All Habits Daily Bonus</span>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between bg-[#111] border border-[#2d2d2d] rounded px-3 py-2">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Bonus Points</span>
+                        <input 
+                          type="number" 
+                          className="bg-transparent text-right outline-none text-white text-[11px] font-medium w-16"
+                          value={gamificationStats?.allHabitsBonus ?? 50}
+                          onChange={async (e) => {
+                            if (!user) return;
+                            const nextVal = parseInt(e.target.value) || 0;
+                            const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+                            await updateDoc(statsRef, { allHabitsBonus: nextVal });
+                          }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-gray-600 leading-normal block">Earned when all daily main habits are successfully completed.</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -680,11 +923,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                 isPeek={true}
                                 streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                 onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
-                                onToggleSubTask={async (subId: string, current: boolean) => {
-                                  if (!user) return;
-                                  const key = `${task.id}_${subId}`;
-                                  await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'records', record.id), { [`data.${key}`]: !current });
-                                }}
+                                onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
                                 onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
                                 isEditing={editingTaskId === task.id} 
                                 onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
@@ -1238,37 +1477,92 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
       </div>
 
       {expanded && task.type === 'habit' && onUpdate && (
-        <div className="p-3 pt-0 border-t border-[#2d2d2d] mt-1 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Points Value</span>
+        <div className="p-4 pt-2 border-t border-[#2d2d2d] mt-1 space-y-4 text-left">
+          {/* Main Task Settings */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Main Task Base Points</span>
+              <input 
+                type="number" 
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                defaultValue={task.pointsValue || 10}
+                onBlur={(e) => onUpdate(task.id, { pointsValue: parseInt(e.target.value) || 10 })}
+              />
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Auto-Tick Completion</span>
+              <select
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                value={task.autoTickMode || 'manual'}
+                onChange={(e) => onUpdate(task.id, { autoTickMode: e.target.value })}
+              >
+                <option value="manual">Manual Toggle Only</option>
+                <option value="any">Complete when ANY sub-task is completed</option>
+                <option value="all">Complete when ALL sub-tasks are completed</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 border-t border-[#2d2d2d]/50 pt-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Reward Mode</span>
+              <select
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                value={task.rewardMode || 'main_only'}
+                onChange={(e) => onUpdate(task.id, { rewardMode: e.target.value })}
+              >
+                <option value="main_only">Reward Main Task Only</option>
+                <option value="subtasks_separately">Reward Sub-Tasks Separately</option>
+              </select>
+            </div>
+
+            {task.rewardMode === 'subtasks_separately' && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Points per Sub-Task</span>
+                <input 
+                  type="number" 
+                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                  defaultValue={task.subTaskPoints ?? 2}
+                  onBlur={(e) => onUpdate(task.id, { subTaskPoints: parseInt(e.target.value) ?? 2 })}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1 border-t border-[#2d2d2d]/50 pt-3">
+            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Bonus Points (All Sub-Tasks Complete)</span>
             <input 
               type="number" 
-              className="bg-[#111] border border-[#2d2d2d] rounded px-2 py-1 text-[11px] text-white w-16 text-right outline-none focus:border-blue-500"
-              defaultValue={task.pointsValue || 10}
-              onBlur={(e) => onUpdate(task.id, { pointsValue: parseInt(e.target.value) || 10 })}
+              className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+              defaultValue={task.bonusPoints ?? 5}
+              onBlur={(e) => onUpdate(task.id, { bonusPoints: parseInt(e.target.value) ?? 5 })}
             />
           </div>
           
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Sub-Tasks</span>
-            <div className="space-y-1 mt-1">
+          <div className="space-y-1.5 border-t border-[#2d2d2d]/50 pt-3">
+            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Sub-Tasks List</span>
+            <div className="space-y-1.5 mt-1 max-h-40 overflow-y-auto custom-scrollbar">
               {(task.subTasks || []).map((sub: any) => (
-                <div key={sub.id} className="flex items-center gap-2 px-2 py-1 bg-[#111] rounded border border-[#2d2d2d]">
-                  <span className="text-[11px] text-gray-300 flex-1">{sub.title}</span>
+                <div key={sub.id} className="flex items-center gap-2 px-2.5 py-1.5 bg-[#111] rounded border border-[#2d2d2d] hover:border-[#333] transition-colors">
+                  <span className="text-[11px] font-medium text-gray-300 flex-1">{sub.title}</span>
                   <button onClick={() => {
                     const newSubs = task.subTasks!.filter(s => s.id !== sub.id);
                     onUpdate(task.id, { subTasks: newSubs });
-                  }} className="text-gray-600 hover:text-red-500"><Trash2 size={10}/></button>
+                  }} className="text-gray-600 hover:text-red-500 p-0.5"><Trash2 size={11}/></button>
                 </div>
               ))}
+              {(task.subTasks || []).length === 0 && (
+                <div className="text-[10px] text-gray-600 py-1 italic text-center">No sub-tasks configured.</div>
+              )}
             </div>
             <div className="flex gap-2 mt-2">
               <input 
                 type="text" 
                 value={newSubTask}
                 onChange={e => setNewSubTask(e.target.value)}
-                placeholder="New sub-task..."
-                className="flex-1 bg-[#111] border border-[#2d2d2d] rounded px-2 py-1.5 text-[11px] text-white outline-none focus:border-blue-500"
+                placeholder="Type new sub-task and press Enter..."
+                className="flex-1 bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] text-white outline-none focus:border-purple-500 transition-colors"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newSubTask.trim()) {
                     const subId = Date.now().toString();
