@@ -1161,9 +1161,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       <Modal isOpen={isPropertyModalOpen} onClose={() => setIsPropertyModalOpen(false)} title="Master Task Definitions" maxWidth="750px">
         <div className="space-y-4 p-1">
           <div className="flex gap-2 pb-4 border-b border-[#1a1a1a]">
-            <button onClick={() => addMasterTask('habit')} className="flex-1 py-2 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-500 hover:text-white hover:border-[#3d3d3d] transition-all"><Plus size={14}/> <span className="text-[8px] font-black uppercase">Habit</span></button>
-            <button onClick={() => addMasterTask('counter')} className="flex-1 py-2 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-500 hover:text-white hover:border-[#3d3d3d] transition-all"><Activity size={14}/> <span className="text-[8px] font-black uppercase">Counter</span></button>
-            <button onClick={() => addMasterTask('notes')} className="flex-1 py-2 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-500 hover:text-white hover:border-[#3d3d3d] transition-all"><StickyNote size={14}/> <span className="text-[8px] font-black uppercase">Notes</span></button>
+            <button onClick={() => addMasterTask('habit')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><Plus size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Habit</span></button>
+            <button onClick={() => addMasterTask('counter')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><Activity size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Counter</span></button>
+            <button onClick={() => addMasterTask('notes')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><StickyNote size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Notes</span></button>
           </div>
           <div className="space-y-2">
             <DndContext
@@ -1453,47 +1453,47 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
 
   return (
     <div ref={setNodeRef} style={style} className="flex flex-col bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] hover:border-[#3d3d3d] group">
-      <div className="flex items-center gap-3 p-2">
+      <div className="flex items-center gap-3 p-3">
         <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 text-gray-600 hover:text-gray-400 transition-colors">
-          <GripVertical size={14} />
+          <GripVertical size={16} />
         </div>
         <div className="w-5 flex justify-center shrink-0">
-          <Icon size={12} className="text-gray-600" />
+          <Icon size={14} className="text-gray-500" />
         </div>
         <input
-          className="flex-1 bg-transparent text-[11.5px] font-bold text-gray-300 outline-none min-w-0"
+          className="flex-1 bg-transparent text-[13px] font-bold text-gray-200 outline-none min-w-0"
           defaultValue={task.name}
           onBlur={(e) => onRename(task.id, (e.target as HTMLInputElement).value)}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         />
         {task.type === 'habit' && onUpdate && (
-          <button onClick={() => setExpanded(!expanded)} className="p-1.5 text-gray-600 hover:text-blue-400 transition-colors shrink-0">
-            <Settings size={14} />
+          <button onClick={() => setExpanded(!expanded)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors shrink-0">
+            <Settings size={16} />
           </button>
         )}
-        <button onClick={() => onDelete(task.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-600 hover:text-red-500 transition-all shrink-0">
-          <Trash2 size={14} />
+        <button onClick={() => onDelete(task.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-500 transition-all shrink-0">
+          <Trash2 size={16} />
         </button>
       </div>
 
       {expanded && task.type === 'habit' && onUpdate && (
-        <div className="p-4 pt-2 border-t border-[#2d2d2d] mt-1 space-y-4 text-left">
+        <div className="p-5 pt-2 border-t border-[#2d2d2d] mt-1 space-y-4 text-left">
           {/* Main Task Settings */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Main Task Base Points</span>
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Main Task Base Points</span>
               <input 
                 type="number" 
-                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
                 defaultValue={task.pointsValue || 10}
                 onBlur={(e) => onUpdate(task.id, { pointsValue: parseInt(e.target.value) || 10 })}
               />
             </div>
             
             <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Auto-Tick Completion</span>
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Auto-Tick Completion</span>
               <select
-                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
                 value={task.autoTickMode || 'manual'}
                 onChange={(e) => onUpdate(task.id, { autoTickMode: e.target.value })}
               >
@@ -1506,9 +1506,9 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-[#2d2d2d]/50 pt-3">
             <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Reward Mode</span>
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Reward Mode</span>
               <select
-                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
                 value={task.rewardMode || 'main_only'}
                 onChange={(e) => onUpdate(task.id, { rewardMode: e.target.value })}
               >
@@ -1519,10 +1519,10 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
 
             {task.rewardMode === 'subtasks_separately' && (
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Points per Sub-Task</span>
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Points per Sub-Task</span>
                 <input 
                   type="number" 
-                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
                   defaultValue={task.subTaskPoints ?? 2}
                   onBlur={(e) => onUpdate(task.id, { subTaskPoints: parseInt(e.target.value) ?? 2 })}
                 />
@@ -1531,29 +1531,29 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
           </div>
 
           <div className="flex flex-col gap-1 border-t border-[#2d2d2d]/50 pt-3">
-            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Bonus Points (All Sub-Tasks Complete)</span>
+            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Bonus Points (All Sub-Tasks Complete)</span>
             <input 
               type="number" 
-              className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+              className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
               defaultValue={task.bonusPoints ?? 5}
               onBlur={(e) => onUpdate(task.id, { bonusPoints: parseInt(e.target.value) ?? 5 })}
             />
           </div>
           
           <div className="space-y-1.5 border-t border-[#2d2d2d]/50 pt-3">
-            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Sub-Tasks List</span>
+            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Sub-Tasks List</span>
             <div className="space-y-1.5 mt-1 max-h-40 overflow-y-auto custom-scrollbar">
               {(task.subTasks || []).map((sub: any) => (
-                <div key={sub.id} className="flex items-center gap-2 px-2.5 py-1.5 bg-[#111] rounded border border-[#2d2d2d] hover:border-[#333] transition-colors">
-                  <span className="text-[11px] font-medium text-gray-300 flex-1">{sub.title}</span>
+                <div key={sub.id} className="flex items-center gap-2 px-3 py-2 bg-[#111] rounded border border-[#2d2d2d] hover:border-[#333] transition-colors">
+                  <span className="text-[12.5px] font-medium text-gray-200 flex-1">{sub.title}</span>
                   <button onClick={() => {
                     const newSubs = task.subTasks!.filter(s => s.id !== sub.id);
                     onUpdate(task.id, { subTasks: newSubs });
-                  }} className="text-gray-600 hover:text-red-500 p-0.5"><Trash2 size={11}/></button>
+                  }} className="text-gray-500 hover:text-red-500 p-0.5"><Trash2 size={13}/></button>
                 </div>
               ))}
               {(task.subTasks || []).length === 0 && (
-                <div className="text-[10px] text-gray-600 py-1 italic text-center">No sub-tasks configured.</div>
+                <div className="text-[11.5px] text-gray-500 py-1 italic text-center">No sub-tasks configured.</div>
               )}
             </div>
             <div className="flex gap-2 mt-2">
@@ -1562,7 +1562,7 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
                 value={newSubTask}
                 onChange={e => setNewSubTask(e.target.value)}
                 placeholder="Type new sub-task and press Enter..."
-                className="flex-1 bg-[#111] border border-[#2d2d2d] rounded px-3 py-1.5 text-[11px] text-white outline-none focus:border-purple-500 transition-colors"
+                className="flex-1 bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] text-white outline-none focus:border-purple-500 transition-colors"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newSubTask.trim()) {
                     const subId = Date.now().toString();
