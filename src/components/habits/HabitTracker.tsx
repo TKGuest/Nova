@@ -848,32 +848,32 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 <Settings size={14}/> Settings
               </button>
               {isSettingsOpen && (
-                <div onClick={(e) => e.stopPropagation()} className="absolute top-full left-0 mt-2 z-[100] w-64 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg shadow-2xl p-4 space-y-6 text-left">
+                <div onClick={(e) => e.stopPropagation()} className="absolute top-full right-0 mt-2 z-[100] w-64 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg shadow-2xl p-4 space-y-6 text-left">
                   <div className="space-y-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Dashboard Tools</span>
-                    <button onClick={() => { setIsPropertyModalOpen(true); setIsSettingsOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#2d2d2d] text-gray-400 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all"><Settings2 size={16}/> Manage Properties</button>
-                    <button onClick={() => { setIsDefaultCoverModalOpen(true); setIsSettingsOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#2d2d2d] text-gray-400 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all"><ImageIcon size={16}/> Default Card Cover</button>
+                    <button onClick={() => { setIsPropertyModalOpen(true); setIsSettingsOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#2d2d2d] text-gray-400 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer"><Settings2 size={16}/> Manage Properties</button>
+                    <button onClick={() => { setIsDefaultCoverModalOpen(true); setIsSettingsOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#2d2d2d] text-gray-400 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer"><ImageIcon size={16}/> Default Card Cover</button>
                   </div>
                   <div className="space-y-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Counter Format</span>
                     <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-                      <button onClick={() => setCounterFormat('fraction')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${counterFormat === 'fraction' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Fraction</button>
-                      <button onClick={() => setCounterFormat('percent')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${counterFormat === 'percent' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Percent</button>
+                      <button onClick={() => setCounterFormat('fraction')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${counterFormat === 'fraction' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Fraction</button>
+                      <button onClick={() => setCounterFormat('percent')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${counterFormat === 'percent' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Percent</button>
                     </div>
                   </div>
                   <div className="space-y-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Text Scaling</span>
                     <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-                      <button onClick={() => setTextSize('small')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all ${textSize === 'small' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A</button>
-                      <button onClick={() => setTextSize('medium')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all ${textSize === 'medium' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A+</button>
-                      <button onClick={() => setTextSize('large')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all ${textSize === 'large' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A++</button>
+                      <button onClick={() => setTextSize('small')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'small' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A</button>
+                      <button onClick={() => setTextSize('medium')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'medium' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A+</button>
+                      <button onClick={() => setTextSize('large')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'large' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A++</button>
                     </div>
                   </div>
                   <div className="space-y-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Long Tasks Display</span>
                     <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-                      <button onClick={() => setTextTruncateMode('wrap')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${textTruncateMode === 'wrap' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Wrap</button>
-                      <button onClick={() => setTextTruncateMode('truncate')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${textTruncateMode === 'truncate' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Truncate</button>
+                      <button onClick={() => setTextTruncateMode('wrap')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${textTruncateMode === 'wrap' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Wrap</button>
+                      <button onClick={() => setTextTruncateMode('truncate')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${textTruncateMode === 'truncate' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Truncate</button>
                     </div>
                   </div>
                   <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
@@ -1238,22 +1238,22 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] transition-opacity duration-300 animate-fade-in"
           />
           <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-[#141414] border-l border-[#2d2d2d] z-[200] shadow-2xl p-6 flex flex-col h-full overflow-hidden transition-all duration-300 ease-out transform translate-x-0">
-            <div className="flex items-center justify-between pb-4 border-b border-[#2d2d2d] mb-4">
-              <div className="flex items-center gap-2">
-                <ShoppingBag className="text-yellow-500 animate-pulse" size={18} />
-                <div>
-                  <h2 className="text-[12px] font-black uppercase tracking-wider text-yellow-500 font-black">Gold & Buff Shop</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#2d2d2d] mb-4 gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <ShoppingBag className="text-yellow-500 animate-pulse shrink-0" size={18} />
+                <div className="min-w-0">
+                  <h2 className="text-[12px] font-black uppercase tracking-wider text-yellow-500 font-black truncate">Gold & Buff Shop</h2>
                   <span className="text-[10px] text-gray-500 font-bold block mt-0.5">Available: {(gamificationStats?.points || 0).toLocaleString()} pts</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
                 <button 
                   onClick={() => setIsEditMode(!isEditMode)} 
-                  className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-all ${isEditMode ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-black' : 'bg-[#222] border border-[#333] text-gray-400 hover:text-white'}`}
+                  className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${isEditMode ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-black' : 'bg-[#222] border border-[#333] text-gray-400 hover:text-white'}`}
                 >
                   {isEditMode ? 'Exit Edit' : 'Edit Shop'}
                 </button>
-                <button onClick={() => setIsShopOpen(false)} className="p-1 text-gray-500 hover:text-white hover:bg-[#222] rounded transition-all">
+                <button onClick={() => setIsShopOpen(false)} className="p-1.5 text-gray-500 hover:text-white hover:bg-[#222] rounded transition-all flex items-center justify-center cursor-pointer" title="Close Shop">
                   <X size={18} />
                 </button>
               </div>
@@ -1294,7 +1294,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                           </div>
                           <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{item.description}</p>
                           {item.durationHours && item.durationHours > 0 ? (
-                            <span className="text-[9px] text-blue-500 font-bold block mt-1">Duration: {item.durationHours} hours</span>
+                            <span className="text-[9px] text-blue-500 font-bold block mt-1">
+                              Duration: {item.durationValue || item.durationHours} {item.durationUnit || 'hours'}
+                            </span>
                           ) : null}
                         </div>
                         
@@ -1302,7 +1304,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                           <div className="flex gap-1 shrink-0 z-10">
                             <button 
                               onClick={() => setEditingItem(item)} 
-                              className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors"
+                              className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors cursor-pointer"
                               title="Edit Item"
                             >
                               <Edit2 size={13} />
@@ -1310,7 +1312,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             {!(item.name.toLowerCase().includes('streak insurance') || item.name.toLowerCase().includes('holiday pass')) && (
                               <button 
                                 onClick={() => handleDeleteShopItem(item.id)} 
-                                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors cursor-pointer"
                                 title="Delete Item"
                               >
                                 <Trash2 size={13} />
@@ -1320,7 +1322,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         ) : (
                           <button 
                             onClick={() => handleBuyItem(item)}
-                            className="shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-purple-500/10"
+                            className="shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-purple-500/10 cursor-pointer"
                           >
                             {item.cost} <span className="opacity-70 text-[10px]">pts</span>
                           </button>
@@ -1460,7 +1462,7 @@ function SortableMasterItem({
         )}
         
         {hasSubtasks ? (
-          <button onClick={toggleExpanded} className="text-gray-500 hover:text-gray-300 transition-colors shrink-0">
+          <button onClick={toggleExpanded} className="text-gray-500 hover:text-gray-300 transition-colors shrink-0 cursor-pointer">
             <ChevronRight size={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           </button>
         ) : (
@@ -1474,7 +1476,7 @@ function SortableMasterItem({
         {isEditing ? (
           <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
         ) : (
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
             <span className={`font-medium tracking-tight transition-all ${
               completed ? 'text-gray-700 line-through' : 'text-gray-400'
             } ${
@@ -1495,8 +1497,8 @@ function SortableMasterItem({
             const subKey = `${task.id}_${sub.id}`;
             const subCompleted = !!recordData?.[subKey];
             return (
-              <div key={sub.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#1a1a1a] transition-colors min-w-0">
-                <div className={`${subCheckboxScale} origin-left shrink-0`}>
+              <div key={sub.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#1a1a1a] transition-colors min-w-0 cursor-pointer" onClick={() => onToggleSubTask(sub.id, subCompleted)}>
+                <div className={`${subCheckboxScale} origin-left shrink-0`} onClick={(e) => e.stopPropagation()}>
                   <Checkbox checked={subCompleted} onClick={() => onToggleSubTask(sub.id, subCompleted)} />
                 </div>
                 <span className={`transition-colors flex-1 min-w-0 text-left ${
@@ -1663,7 +1665,8 @@ function ShopItemFormModal({
   const [description, setDescription] = useState(initialItem?.description || '');
   const [cost, setCost] = useState(initialItem?.cost || 100);
   const [type, setType] = useState<ShopItem['type']>(initialItem?.type || 'buff');
-  const [durationHours, setDurationHours] = useState(initialItem?.durationHours || 24);
+  const [durationValue, setDurationValue] = useState<number>(initialItem?.durationValue || initialItem?.durationHours || 24);
+  const [durationUnit, setDurationUnit] = useState<'minutes' | 'hours'>(initialItem?.durationUnit || 'hours');
 
   useEffect(() => {
     if (initialItem) {
@@ -1671,13 +1674,15 @@ function ShopItemFormModal({
       setDescription(initialItem.description);
       setCost(initialItem.cost);
       setType(initialItem.type);
-      setDurationHours(initialItem.durationHours || 24);
+      setDurationValue(initialItem.durationValue || initialItem.durationHours || 24);
+      setDurationUnit(initialItem.durationUnit || 'hours');
     } else {
       setName('');
       setDescription('');
       setCost(100);
       setType('buff');
-      setDurationHours(24);
+      setDurationValue(24);
+      setDurationUnit('hours');
     }
   }, [initialItem, isOpen]);
 
@@ -1724,7 +1729,7 @@ function ShopItemFormModal({
             <select 
               value={type} 
               onChange={(e) => setType(e.target.value as ShopItem['type'])} 
-              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
             >
               <option value="buff">Buff (Temporal)</option>
               <option value="timer">Timer (Focus)</option>
@@ -1735,33 +1740,55 @@ function ShopItemFormModal({
         </div>
 
         {(type === 'buff' || type === 'timer') && (
-          <div>
-            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">
-              {type === 'buff' ? 'Buff Duration (Hours)' : 'Timer Duration (Hours)'}
-            </label>
-            <input 
-              type="number" 
-              step="any"
-              value={durationHours} 
-              onChange={(e) => setDurationHours(Math.max(0.01, parseFloat(e.target.value) || 0))} 
-              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50" 
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">
+                {type === 'buff' ? 'Buff Duration' : 'Timer Duration'}
+              </label>
+              <input 
+                type="number" 
+                step="any"
+                value={durationValue} 
+                onChange={(e) => setDurationValue(Math.max(0.01, parseFloat(e.target.value) || 0))} 
+                className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50" 
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Duration Unit</label>
+              <select 
+                value={durationUnit} 
+                onChange={(e) => setDurationUnit(e.target.value as 'minutes' | 'hours')} 
+                className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
+              >
+                <option value="hours">Hours</option>
+                <option value="minutes">Minutes</option>
+              </select>
+            </div>
           </div>
         )}
 
         <div className="flex justify-end gap-2 pt-4 border-t border-[#222] mt-4">
           <button 
             onClick={onClose} 
-            className="px-4 py-2 bg-[#222] text-gray-400 hover:text-white rounded-lg text-xs font-bold transition-all"
+            className="px-4 py-2 bg-[#222] text-gray-400 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
           >
             Cancel
           </button>
           <button 
             onClick={() => {
               if (!name.trim()) return;
-              onSubmit({ name, description, cost, type, durationHours });
+              const calculatedHours = durationUnit === 'minutes' ? durationValue / 60 : durationValue;
+              onSubmit({ 
+                name, 
+                description, 
+                cost, 
+                type, 
+                durationHours: calculatedHours,
+                durationValue,
+                durationUnit
+              });
             }} 
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Sparkles size={14} /> {initialItem ? 'Save Changes' : 'Create Item'}
           </button>

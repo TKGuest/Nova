@@ -102,9 +102,17 @@ export function GamificationDashboard({
       return;
     }
 
-    // Determine duration in minutes based on durationHours or fallback to 10
-    let minutes = item.durationHours ? Math.round(item.durationHours * 60) : 10;
-    if (!item.durationHours && item.id === 'timer_10') minutes = 10;
+    // Determine duration in minutes based on custom unit settings or fallback to durationHours
+    let minutes = 10;
+    if (item.durationUnit === 'minutes' && item.durationValue) {
+      minutes = item.durationValue;
+    } else if (item.durationUnit === 'hours' && item.durationValue) {
+      minutes = Math.round(item.durationValue * 60);
+    } else if (item.durationHours) {
+      minutes = Math.round(item.durationHours * 60);
+    } else if (item.id === 'timer_10') {
+      minutes = 10;
+    }
 
     // Remove 1 quantity from inventory
     const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
@@ -188,19 +196,10 @@ export function GamificationDashboard({
           )}
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
-          <div className={`bg-[#111] border ${stats.debt ? 'border-red-500/50' : 'border-[#2d2d2d]'} rounded-lg p-4 relative flex flex-col justify-center`}>
-            {stats.debt && <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.6)]">DEBT MODE</div>}
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Available Points</span>
-            <span className={`text-3xl font-black ${stats.debt ? 'text-red-500' : 'text-white'}`}>{stats.points.toLocaleString()}</span>
-          </div>
-          
-          <div className="bg-[#111] border border-[#2d2d2d] rounded-lg p-4 flex flex-col justify-center">
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Status Level</span>
-            <span className="text-2xl font-black text-green-400">
-              {stats.points < 100 ? 'Novice' : stats.points < 500 ? 'Adventurer' : stats.points < 2000 ? 'Hero' : 'Legend'}
-            </span>
-          </div>
+        <div className={`bg-[#111] border ${stats.debt ? 'border-red-500/50' : 'border-[#2d2d2d]'} rounded-lg p-4 relative flex flex-col justify-center text-left`}>
+          {stats.debt && <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.6)]">DEBT MODE</div>}
+          <span className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">Available Points</span>
+          <span className={`text-3xl font-black ${stats.debt ? 'text-red-500' : 'text-white'}`}>{stats.points.toLocaleString()}</span>
         </div>
 
         {timeLeft && (
