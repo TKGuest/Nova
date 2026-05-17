@@ -692,7 +692,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                     <div className="flex-1 h-[1px] bg-[#1a1a1a]" />
                   </div>
                   {!collapsedWeeks.has(key) && (
-                    <div className={`grid gap-4 w-full ${isPeek ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'}`}>
+                    <div className={`grid gap-4 w-full ${isPeek ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 2xl:grid-cols-8'}`}>
                       {group.items.map(record => {
                         const dateObj = parseISO(record.date);
                         const habits = masterTasks.filter(t => t.type === 'habit');
