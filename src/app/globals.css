@@ -76,3 +76,14 @@ html, body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(147, 51, 234, 0.55);
 }
+
+/* Disable basic native number input spinners (up/down arrow scroll selectors) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

@@ -512,7 +512,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     }
     
     // B. 100% Sub-tasks Completed Bonus
-    if (task.subTasks && task.subTasks.length > 0) {
+    if (task.subTasks && task.subTasks.length > 0 && task.rewardMode !== 'subtasks_separately') {
       const totalSubs = task.subTasks.length;
       const prevCompletedCount = task.subTasks.filter(s => !!recordData[`${taskId}_${s.id}`]).length;
       const nextCompletedCount = task.subTasks.filter(s => !!nextRecordData[`${taskId}_${s.id}`]).length;
@@ -1481,7 +1481,9 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
           {/* Main Task Settings */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Main Task Base Points</span>
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                {task.rewardMode === 'subtasks_separately' ? 'Main Task Completion Bonus' : 'Main Task Base Points'}
+              </span>
               <input 
                 type="number" 
                 className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
@@ -1530,15 +1532,17 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
             )}
           </div>
 
-          <div className="flex flex-col gap-1 border-t border-[#2d2d2d]/50 pt-3">
-            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Bonus Points (All Sub-Tasks Complete)</span>
-            <input 
-              type="number" 
-              className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
-              defaultValue={task.bonusPoints ?? 5}
-              onBlur={(e) => onUpdate(task.id, { bonusPoints: parseInt(e.target.value) ?? 5 })}
-            />
-          </div>
+          {task.rewardMode !== 'subtasks_separately' && (
+            <div className="flex flex-col gap-1 border-t border-[#2d2d2d]/50 pt-3">
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Bonus Points (All Sub-Tasks Complete)</span>
+              <input 
+                type="number" 
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                defaultValue={task.bonusPoints ?? 5}
+                onBlur={(e) => onUpdate(task.id, { bonusPoints: parseInt(e.target.value) ?? 5 })}
+              />
+            </div>
+          )}
           
           <div className="space-y-1.5 border-t border-[#2d2d2d]/50 pt-3">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Sub-Tasks List</span>
