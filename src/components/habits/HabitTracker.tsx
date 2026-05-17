@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc } from 'firebase/firestore';
-import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2 } from 'lucide-react';
+import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc, addDoc } from 'firebase/firestore';
+import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Clock, Edit2 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modals';
-import { PageModel, HabitStats } from '../../types';
+import { PageModel, HabitStats, ShopItem, InventoryItem } from '@/types';
+import { useNotification } from '@/context/NotificationContext';
 import { format, isSameDay, startOfDay, eachDayOfInterval, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, parseISO, addDays, isAfter, isSameWeek, getYear, getMonth, addMonths, subMonths, setYear, setMonth, isSameMonth } from 'date-fns';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -65,6 +66,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, label: string } | null>(null);
   const [isGamificationOpen, setIsGamificationOpen] = useState(false);
   const [gamificationStats, setGamificationStats] = useState<HabitStats | null>(null);
+  
+  // Shop & Inventory States
+  const [isShopOpen, setIsShopOpen] = useState(false);
+  const [shopItems, setShopItems] = useState<ShopItem[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
+  const [newItemModal, setNewItemModal] = useState(false);
+  const { showToast, confirm: customConfirm } = useNotification();
 
 
   const sensors = useSensors(
@@ -107,6 +117,48 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const unsubStats = onSnapshot(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), (snapshot) => {
       if (snapshot.exists()) setGamificationStats(snapshot.data() as HabitStats);
     });
+    const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
+    const unsubInv = onSnapshot(invRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setInventory(docSnap.data().items || []);
+      } else {
+        setDoc(invRef, { items: [] });
+        setInventory([]);
+      }
+    });
+    const shopRef = collection(db, 'users', user.uid, 'pages', pageId, 'shop_items');
+    const unsubShop = onSnapshot(shopRef, async (snapshot) => {
+      if (snapshot.empty) {
+        const defaultItems = [
+          {
+            name: 'Streak Insurance',
+            description: 'Prevents your streak multiplier from resetting for 1 missed day.',
+            cost: 500,
+            type: 'buff',
+            durationHours: 24
+          },
+          {
+            name: 'Holiday Pass (Skip Day)',
+            description: 'Take a break without penalty. Stats are frozen for the day.',
+            cost: 1000,
+            type: 'buff',
+            durationHours: 24
+          },
+          {
+            name: '10 Min Focus Timer',
+            description: 'Activate a focus timer. Alerts you even in the background.',
+            cost: 100,
+            type: 'timer',
+            durationHours: 0.16
+          }
+        ];
+        for (const item of defaultItems) {
+          await addDoc(shopRef, item);
+        }
+      } else {
+        setShopItems(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ShopItem)));
+      }
+    });
     const handleOpenManager = () => setIsPropertyModalOpen(true);
     window.addEventListener('open-task-manager', handleOpenManager);
     const handleClick = () => { 
@@ -115,7 +167,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
     window.addEventListener('click', handleClick);
     return () => { 
-      unsubMaster(); unsubRecords(); unsubPage(); unsubStats();
+      unsubMaster(); unsubRecords(); unsubPage(); unsubStats(); unsubInv(); unsubShop();
       window.removeEventListener('open-task-manager', handleOpenManager);
       window.removeEventListener('click', handleClick);
     };
@@ -388,6 +440,85 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     }
   };
 
+  const handleBuyItem = async (item: ShopItem) => {
+    if (!user || !gamificationStats) return;
+    if (gamificationStats.debt || gamificationStats.points < item.cost) {
+      showToast('Not enough points or in Debt Mode!', 'error');
+      return;
+    }
+
+    customConfirm({
+      title: `Purchase ${item.name}?`,
+      message: `This will cost ${item.cost} points.`,
+      confirmLabel: 'Buy',
+      onConfirm: async () => {
+        const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+        await updateDoc(statsRef, { points: gamificationStats.points - item.cost });
+
+        const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
+        const existingItem = inventory.find(i => i.id === item.id);
+        
+        let newItems = [...inventory];
+        if (existingItem) {
+          newItems = newItems.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1, costPurchased: item.cost } : i);
+        } else {
+          newItems.push({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            quantity: 1,
+            costPurchased: item.cost
+          });
+        }
+        
+        await updateDoc(invRef, { items: newItems });
+        showToast(`${item.name} purchased!`, 'success');
+      }
+    });
+  };
+
+  const handleCreateShopItem = async (itemData: Omit<ShopItem, 'id'>) => {
+    if (!user) return;
+    try {
+      const shopRef = collection(db, 'users', user.uid, 'pages', pageId, 'shop_items');
+      await addDoc(shopRef, itemData);
+      setNewItemModal(false);
+      showToast('Item added to shop!', 'success');
+    } catch (err) {
+      showToast('Failed to create item', 'error');
+    }
+  };
+
+  const handleUpdateShopItem = async (itemData: Omit<ShopItem, 'id'>) => {
+    if (!user || !editingItem) return;
+    try {
+      const itemRef = doc(db, 'users', user.uid, 'pages', pageId, 'shop_items', editingItem.id);
+      await updateDoc(itemRef, itemData as any);
+      setEditingItem(null);
+      showToast('Item updated!', 'success');
+    } catch (err) {
+      showToast('Failed to update item', 'error');
+    }
+  };
+
+  const handleDeleteShopItem = async (itemId: string) => {
+    if (!user) return;
+    customConfirm({
+      title: 'Delete Shop Item?',
+      message: 'Are you sure you want to remove this item from the shop permanently?',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        try {
+          const itemRef = doc(db, 'users', user.uid, 'pages', pageId, 'shop_items', itemId);
+          await deleteDoc(itemRef);
+          showToast('Item deleted from shop', 'success');
+        } catch (err) {
+          showToast('Failed to delete item', 'error');
+        }
+      }
+    });
+  };
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className={`w-full flex flex-col bg-[#0a0a0a] ${isPeek ? 'flex-1 min-h-0 overflow-hidden py-4 px-6' : 'py-4 px-4 md:px-10'}`}>
@@ -401,6 +532,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isGamificationOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
             >
               <Gamepad2 size={14}/> Gamify
+            </button>
+            <button 
+              onClick={() => setIsShopOpen(true)} 
+              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isShopOpen ? 'bg-yellow-600 text-black font-black' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-yellow-500 border-yellow-900/30'}`}
+            >
+              <ShoppingBag size={14}/> Shop
             </button>
             <div className="relative">
               <button 
@@ -555,7 +692,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                     <div className="flex-1 h-[1px] bg-[#1a1a1a]" />
                   </div>
                   {!collapsedWeeks.has(key) && (
-                    <div className={`grid gap-2 w-full ${isPeek ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7'}`}>
+                    <div className={`grid gap-4 w-full ${isPeek ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'}`}>
                       {group.items.map(record => {
                         const dateObj = parseISO(record.date);
                         const habits = masterTasks.filter(t => t.type === 'habit');
@@ -769,6 +906,121 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           </div>
         </div>
       </Modal>
+
+      {/* Side Peek Shop */}
+      {isShopOpen && (
+        <>
+          <div 
+            onClick={() => setIsShopOpen(false)} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] transition-opacity duration-300 animate-fade-in"
+          />
+          <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-[#141414] border-l border-[#2d2d2d] z-[200] shadow-2xl p-6 flex flex-col h-full overflow-hidden transition-all duration-300 ease-out transform translate-x-0">
+            <div className="flex items-center justify-between pb-4 border-b border-[#2d2d2d] mb-4">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="text-yellow-500 animate-pulse" size={18} />
+                <div>
+                  <h2 className="text-[12px] font-black uppercase tracking-wider text-yellow-500 font-black">Gold & Buff Shop</h2>
+                  <span className="text-[10px] text-gray-500 font-bold block mt-0.5">Available: {(gamificationStats?.points || 0).toLocaleString()} pts</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsEditMode(!isEditMode)} 
+                  className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-all ${isEditMode ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-black' : 'bg-[#222] border border-[#333] text-gray-400 hover:text-white'}`}
+                >
+                  {isEditMode ? 'Exit Edit' : 'Edit Shop'}
+                </button>
+                <button onClick={() => setIsShopOpen(false)} className="p-1 text-gray-500 hover:text-white hover:bg-[#222] rounded transition-all">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar">
+              {isEditMode && (
+                <button 
+                  onClick={() => setNewItemModal(true)} 
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-purple-600/10 border border-dashed border-purple-500/30 text-purple-400 hover:text-white hover:bg-purple-600/20 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                >
+                  <Plus size={14} /> Add Custom Shop Item
+                </button>
+              )}
+
+              {shopItems.length === 0 ? (
+                <div className="text-center py-16 text-gray-500 border border-dashed border-[#2d2d2d] rounded-xl text-sm font-bold">
+                  The shop is currently empty.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {shopItems.map(item => {
+                    const icon = 
+                      item.type === 'buff' ? <Shield size={20} className="text-blue-400" /> :
+                      item.type === 'timer' ? <Timer size={20} className="text-green-400" /> :
+                      item.type === 'note' ? <Sparkles size={20} className="text-purple-400" /> :
+                      <Clock size={20} className="text-orange-400" />;
+
+                    return (
+                      <div key={item.id} className="flex items-center gap-4 p-4 bg-[#111] border border-[#2d2d2d] rounded-xl hover:border-purple-500/30 transition-all group relative">
+                        <div className="p-3 bg-[#1a1a1a] rounded-lg group-hover:scale-105 transition-transform shrink-0">
+                          {icon}
+                        </div>
+                        <div className="flex-1 min-w-0 text-left">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-bold text-gray-200 truncate">{item.name}</h3>
+                            <span className="text-[8px] font-black uppercase tracking-wider text-gray-600 bg-[#1a1a1a] px-1 py-0.2 rounded border border-[#2d2d2d]">{item.type}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{item.description}</p>
+                          {item.durationHours && item.durationHours > 0 ? (
+                            <span className="text-[9px] text-blue-500 font-bold block mt-1">Duration: {item.durationHours} hours</span>
+                          ) : null}
+                        </div>
+                        
+                        {isEditMode ? (
+                          <div className="flex gap-1 shrink-0 z-10">
+                            <button 
+                              onClick={() => setEditingItem(item)} 
+                              className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors"
+                              title="Edit Item"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteShopItem(item.id)} 
+                              className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                              title="Delete Item"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => handleBuyItem(item)}
+                            className="shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-purple-500/10"
+                          >
+                            {item.cost} <span className="opacity-70 text-[10px]">pts</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      <ShopItemFormModal 
+        isOpen={newItemModal}
+        onClose={() => setNewItemModal(false)}
+        onSubmit={handleCreateShopItem}
+      />
+      <ShopItemFormModal 
+        isOpen={!!editingItem}
+        onClose={() => setEditingItem(null)}
+        onSubmit={handleUpdateShopItem}
+        initialItem={editingItem}
+      />
     </DndContext>
   );
 }
@@ -825,8 +1077,8 @@ function DatePickerModal({ isOpen, onClose, onSelect, initialDate }: any) {
 }
 
 function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, recordData, isPeek, streak = 0, onContextMenu, isEditing, onRename, textSizeClass, checkboxScale }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !isPeek });
+  const style = isPeek ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 } : {};
   const [tempName, setTempName] = useState(task.name);
   const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -837,17 +1089,21 @@ function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, re
   const hasSubtasks = task.subTasks && task.subTasks.length > 0;
 
   return (
-    <div ref={setNodeRef} style={style} className="flex flex-col mb-1 group/item">
+    <div ref={isPeek ? setNodeRef : null} style={style} className="flex flex-col mb-1 group/item">
       <div onContextMenu={onContextMenu} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 px-1 py-0.5 rounded-md hover:bg-[#252526] transition-all min-h-[22px]">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity"><GripVertical size={10} className="text-gray-800" /></div>
+        {isPeek && (
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+            <GripVertical size={10} className="text-gray-800" />
+          </div>
+        )}
         
         {isPeek && hasSubtasks ? (
           <button onClick={() => setIsExpanded(!isExpanded)} className="text-gray-500 hover:text-gray-300 transition-colors">
             <ChevronRight size={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           </button>
-        ) : (
+        ) : isPeek ? (
           <div className="w-[14px]" /> // Spacer
-        )}
+        ) : null}
 
         <div className={`${checkboxScale} origin-left shrink-0`} onClick={(e) => e.stopPropagation()}>
           <Checkbox checked={completed} onClick={onToggle} />
@@ -857,7 +1113,7 @@ function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, re
           <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
         ) : (
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <span className={`font-medium truncate tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
+            <span className={`font-medium whitespace-normal break-words tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
             {streak > 0 && (
               <span className="text-[10px] text-amber-500 font-bold shrink-0 flex items-center gap-0.5 bg-amber-500/10 px-1.5 py-0.2 rounded hover:bg-amber-500/20 transition-all select-none">
                 🔥 {streak}
@@ -967,5 +1223,125 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
         </div>
       )}
     </div>
+  );
+}
+
+function ShopItemFormModal({ 
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  initialItem 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onSubmit: (item: Omit<ShopItem, 'id'>) => void, 
+  initialItem?: ShopItem | null 
+}) {
+  const [name, setName] = useState(initialItem?.name || '');
+  const [description, setDescription] = useState(initialItem?.description || '');
+  const [cost, setCost] = useState(initialItem?.cost || 100);
+  const [type, setType] = useState<ShopItem['type']>(initialItem?.type || 'buff');
+  const [durationHours, setDurationHours] = useState(initialItem?.durationHours || 24);
+
+  useEffect(() => {
+    if (initialItem) {
+      setName(initialItem.name);
+      setDescription(initialItem.description);
+      setCost(initialItem.cost);
+      setType(initialItem.type);
+      setDurationHours(initialItem.durationHours || 24);
+    } else {
+      setName('');
+      setDescription('');
+      setCost(100);
+      setType('buff');
+      setDurationHours(24);
+    }
+  }, [initialItem, isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={initialItem ? "Edit Shop Item" : "Create Shop Item"}>
+      <div className="space-y-4 p-1 text-left">
+        <div>
+          <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Item Name</label>
+          <input 
+            type="text" 
+            value={name} 
+            onChange={(e) => setName(e.target.value)} 
+            placeholder="e.g. Health Potion" 
+            className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50" 
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Description</label>
+          <textarea 
+            value={description} 
+            onChange={(e) => setDescription(e.target.value)} 
+            placeholder="What does this item do?" 
+            rows={3}
+            className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 resize-none" 
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Cost (Points)</label>
+            <input 
+              type="number" 
+              value={cost} 
+              onChange={(e) => setCost(Math.max(1, parseInt(e.target.value) || 0))} 
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50" 
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Item Type</label>
+            <select 
+              value={type} 
+              onChange={(e) => setType(e.target.value as ShopItem['type'])} 
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+            >
+              <option value="buff">Buff (Temporal)</option>
+              <option value="timer">Timer (Focus)</option>
+              <option value="note">Note (Task Attachment)</option>
+              <option value="instant">Instant (Consumable)</option>
+            </select>
+          </div>
+        </div>
+
+        {type === 'buff' && (
+          <div>
+            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Buff Duration (Hours)</label>
+            <input 
+              type="number" 
+              value={durationHours} 
+              onChange={(e) => setDurationHours(Math.max(1, parseFloat(e.target.value) || 0))} 
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50" 
+            />
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-4 border-t border-[#222] mt-4">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 bg-[#222] text-gray-400 hover:text-white rounded-lg text-xs font-bold transition-all"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => {
+              if (!name.trim()) return;
+              onSubmit({ name, description, cost, type, durationHours });
+            }} 
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+          >
+            <Sparkles size={14} /> {initialItem ? 'Save Changes' : 'Create Item'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
