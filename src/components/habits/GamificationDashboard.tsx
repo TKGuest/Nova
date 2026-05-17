@@ -172,9 +172,9 @@ export function GamificationDashboard({
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
       {/* Left Column: Stats */}
       <div className="bg-[#1a1a1a] border border-purple-900/40 rounded-xl p-6 shadow-2xl relative overflow-hidden group flex flex-col justify-between text-left">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-bl-full blur-2xl group-hover:bg-purple-600/20 transition-all"></div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-bl-full blur-2xl group-hover:bg-purple-600/20 transition-all pointer-events-none"></div>
         
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 relative z-10">
           <h2 className="text-[11px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-2">
             <Shield size={16} /> RPG Status
           </h2>
