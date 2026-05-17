@@ -270,22 +270,22 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
             </div>
           )}
           {!isRepositioning && editable && !isUploading && (
-            <div className="absolute inset-0 bg-black/10 opacity-100 md:opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-end p-4 gap-2">
+            <div className="absolute inset-0 bg-black/10 opacity-100 md:opacity-0 group-hover/cover:opacity-100 transition-opacity flex flex-wrap items-end justify-center sm:justify-end p-2 sm:p-4 gap-1.5 sm:gap-2">
               <button 
                 onClick={() => startReposition()}
-                className="px-5 py-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[12px] font-black uppercase tracking-widest text-white hover:bg-black/80 transition-all flex items-center gap-2"
+                className="px-3 sm:px-5 py-1.5 sm:py-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[9px] sm:text-[12px] font-black uppercase tracking-widest text-white hover:bg-black/80 transition-all flex items-center gap-1 sm:gap-2 cursor-pointer"
               >
-                <Move size={16}/> Reposition
+                <Move size={14} className="sm:w-4 sm:h-4 w-3 h-3"/> Reposition
               </button>
               <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="px-5 py-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[12px] font-black uppercase tracking-widest text-white hover:bg-black/80 transition-all"
+                className="px-3 sm:px-5 py-1.5 sm:py-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[9px] sm:text-[12px] font-black uppercase tracking-widest text-white hover:bg-black/80 transition-all cursor-pointer"
               >
                 Change Cover
               </button>
               <button 
                 onClick={removeCover}
-                className="px-5 py-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[12px] font-black uppercase tracking-widest text-white hover:bg-black/80 transition-all"
+                className="px-3 sm:px-5 py-1.5 sm:py-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[9px] sm:text-[12px] font-black uppercase tracking-widest text-white hover:bg-black/80 transition-all cursor-pointer"
               >
                 Remove
               </button>

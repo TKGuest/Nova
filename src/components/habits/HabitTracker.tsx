@@ -89,6 +89,20 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  // Lock body scroll when modals/drawers are open on mobile
+  useEffect(() => {
+    const isModalOpen = !!sidePeekRecordId || isShopOpen || isPropertyModalOpen || isDefaultCoverModalOpen || isDatePickerOpen !== null || newItemModal || !!editingItem;
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [sidePeekRecordId, isShopOpen, isPropertyModalOpen, isDefaultCoverModalOpen, isDatePickerOpen, newItemModal, editingItem]);
+
+
   useEffect(() => {
     const savedSize = localStorage.getItem(`habits_text_size_${pageId}`);
     if (savedSize) setTextSize(savedSize as TextSize);
