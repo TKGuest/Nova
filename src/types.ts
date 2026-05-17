@@ -49,6 +49,13 @@ export interface WorkspacePage {
   updatedAt: number;
 }
 
+export interface EquippedBuff {
+  id: string;
+  name: string;
+  activatedAt?: string;
+  expiresAt: string | number;
+}
+
 // Gamification Models
 export interface HabitStats {
   points: number;
@@ -59,7 +66,7 @@ export interface HabitStats {
   lastStreakReset: string; 
   pointsEarnedToday?: number; // Inflation control cap
   lastPointGainDate?: string; 
-  equippedBuffs: { itemId: string; name: string; expiresAt: number }[];
+  equippedBuffs: EquippedBuff[];
   taskStreaks?: Record<string, { streak: number, multiplier: number, lastCompletedDate?: string }>;
 }
 
@@ -70,6 +77,7 @@ export interface InventoryItem {
   quantity: number;
   costPurchased: number; // for compound cost calculation
   customText?: string;
+  durationHours?: number;
 }
 
 export interface ShopItem {
