@@ -8,7 +8,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modals';
-import { PageModel } from '../../types';
+import { PageModel, HabitStats } from '../../types';
 import { format, isSameDay, startOfDay, eachDayOfInterval, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, parseISO, addDays, isAfter, isSameWeek, getYear, getMonth, addMonths, subMonths, setYear, setMonth, isSameMonth } from 'date-fns';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -64,6 +64,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, label: string } | null>(null);
   const [isGamificationOpen, setIsGamificationOpen] = useState(false);
+  const [gamificationStats, setGamificationStats] = useState<HabitStats | null>(null);
 
 
   const sensors = useSensors(
@@ -103,6 +104,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const unsubPage = onSnapshot(doc(db, 'users', user.uid, 'pages', pageId), (snapshot) => {
       if (snapshot.exists()) setPageMeta({ id: snapshot.id, ...snapshot.data() } as PageModel);
     });
+    const unsubStats = onSnapshot(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), (snapshot) => {
+      if (snapshot.exists()) setGamificationStats(snapshot.data() as HabitStats);
+    });
     const handleOpenManager = () => setIsPropertyModalOpen(true);
     window.addEventListener('open-task-manager', handleOpenManager);
     const handleClick = () => { 
@@ -111,7 +115,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
     window.addEventListener('click', handleClick);
     return () => { 
-      unsubMaster(); unsubRecords(); unsubPage();
+      unsubMaster(); unsubRecords(); unsubPage(); unsubStats();
       window.removeEventListener('open-task-manager', handleOpenManager);
       window.removeEventListener('click', handleClick);
     };
@@ -140,12 +144,38 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             updates.lastDecayDate = dateStr;
             
             if (updates.points < 0) updates.debt = true;
+            
+            // Decay streaks for each task!
+            const taskStreaks = { ...(stats.taskStreaks || {}) };
+            
             if (diffDays > 1) {
-              updates.streakMultiplier = 1.0;
+              // Missed multiple days, reset all streaks!
+              Object.keys(taskStreaks).forEach(taskId => {
+                taskStreaks[taskId] = {
+                  streak: 0,
+                  multiplier: 1.0,
+                  lastCompletedDate: taskStreaks[taskId]?.lastCompletedDate || ''
+                };
+              });
             } else {
-              // Streak increases slightly every day they log in
-              updates.streakMultiplier = Math.min(1.5, (stats.streakMultiplier || 1.0) + 0.01);
+              // Exactly 1 day passed. Check if each task was completed yesterday.
+              const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+              const yesterdayRecRef = doc(db, 'users', user.uid, 'pages', pageId, 'records', `rec_${yesterdayStr}`);
+              const yesterdayRecSnap = await getDoc(yesterdayRecRef);
+              const yesterdayData = yesterdayRecSnap.exists() ? (yesterdayRecSnap.data()?.data || {}) : {};
+
+              Object.keys(taskStreaks).forEach(taskId => {
+                // If not completed yesterday, reset streak to 0, multiplier to 1.0
+                if (!yesterdayData[taskId]) {
+                  taskStreaks[taskId] = {
+                    streak: 0,
+                    multiplier: 1.0,
+                    lastCompletedDate: taskStreaks[taskId]?.lastCompletedDate || ''
+                  };
+                }
+              });
             }
+            updates.taskStreaks = taskStreaks;
           }
         }
       } else {
@@ -244,14 +274,49 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         const stats = statsSnap.data() as any;
         const task = masterTasks.find(t => t.id === taskId);
         
+        // Handle streak calculation for the specific task
+        const taskStreaks = stats.taskStreaks || {};
+        const currentTaskStreak = taskStreaks[taskId] || { streak: 0, multiplier: 1.0, lastCompletedDate: '' };
+        
+        let newStreak = currentTaskStreak.streak;
+        let newMultiplier = currentTaskStreak.multiplier;
+        let newLastCompletedDate = currentTaskStreak.lastCompletedDate || '';
+
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+
+        if (isCompleted) {
+          if (newLastCompletedDate === yesterdayStr) {
+            newStreak += 1;
+            newMultiplier = Math.min(1.5, newMultiplier + 0.01);
+          } else if (newLastCompletedDate === todayStr) {
+            // Already completed today, do not increment again
+          } else {
+            newStreak = 1;
+            newMultiplier = 1.01;
+          }
+          newLastCompletedDate = todayStr;
+        } else {
+          if (newLastCompletedDate === todayStr) {
+            newStreak = Math.max(0, newStreak - 1);
+            newMultiplier = Math.max(1.0, newMultiplier - 0.01);
+            newLastCompletedDate = yesterdayStr; // Allow re-complete today
+          }
+        }
+
+        taskStreaks[taskId] = {
+          streak: newStreak,
+          multiplier: parseFloat(newMultiplier.toFixed(2)),
+          lastCompletedDate: newLastCompletedDate
+        };
+        
         // Base points: either custom defined on task, or default 10.
         const basePoints = task?.pointsValue || 10; 
-        const multiplier = stats.streakMultiplier || 1.0;
+        const multiplier = newMultiplier || 1.0;
         const pointsChange = Math.round(basePoints * multiplier);
         
         let newPoints = stats.points;
         let pointsEarnedToday = stats.pointsEarnedToday || 0;
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
         
         if (stats.lastPointGainDate !== todayStr) {
           pointsEarnedToday = 0; // Reset cap for new day
@@ -275,7 +340,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           points: newPoints,
           pointsEarnedToday,
           lastPointGainDate: todayStr,
-          debt: newPoints < 0
+          debt: newPoints < 0,
+          taskStreaks
         });
       }
     } catch (err) {
@@ -417,6 +483,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                 completed={!!record.data?.[task.id]} 
                                 recordData={record.data || {}}
                                 isPeek={true}
+                                streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                 onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                 onToggleSubTask={async (subId: string, current: boolean) => {
                                   if (!user) return;
@@ -534,6 +601,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                       completed={!!record.data?.[task.id]} 
                                       recordData={record.data || {}}
                                       isPeek={false}
+                                      streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                       onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                       onToggleSubTask={async (subId: string, current: boolean) => {
                                         if (!user) return;
@@ -588,9 +656,17 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 <thead>
                   <tr className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
                     <th className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-600 border-r border-[#1a1a1a] w-[180px]">Date Record</th>
-                    {masterTasks.filter(t => t.type !== 'notes').map(task => (
-                      <th key={task.id} className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-500 min-w-[120px] text-center">{task.name}</th>
-                    ))}
+                     {masterTasks.filter(t => t.type !== 'notes').map(task => {
+                       const streak = gamificationStats?.taskStreaks?.[task.id]?.streak || 0;
+                       return (
+                         <th key={task.id} className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-500 min-w-[120px] text-center">
+                           <div className="flex items-center justify-center gap-1">
+                             <span>{task.name}</span>
+                             {streak > 0 && <span className="text-[9px] text-amber-500 font-bold bg-amber-500/10 px-1 rounded shrink-0">🔥 {streak}</span>}
+                           </div>
+                         </th>
+                       );
+                     })}
                     <th className="w-10"></th>
                   </tr>
                 </thead>
@@ -748,7 +824,7 @@ function DatePickerModal({ isOpen, onClose, onSelect, initialDate }: any) {
   );
 }
 
-function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, recordData, isPeek, onContextMenu, isEditing, onRename, textSizeClass, checkboxScale }: any) {
+function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, recordData, isPeek, streak = 0, onContextMenu, isEditing, onRename, textSizeClass, checkboxScale }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const [tempName, setTempName] = useState(task.name);
@@ -780,7 +856,14 @@ function SortableMasterItem({ id, task, completed, onToggle, onToggleSubTask, re
         {isEditing ? (
           <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
         ) : (
-          <span className={`flex-1 font-medium truncate tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className={`font-medium truncate tracking-tight transition-all ${completed ? 'text-gray-700 line-through' : 'text-gray-400'} ${textSizeClass}`}>{task.name}</span>
+            {streak > 0 && (
+              <span className="text-[10px] text-amber-500 font-bold shrink-0 flex items-center gap-0.5 bg-amber-500/10 px-1.5 py-0.2 rounded hover:bg-amber-500/20 transition-all select-none">
+                🔥 {streak}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
