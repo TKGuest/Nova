@@ -1158,7 +1158,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           <button onClick={() => { deleteMasterTask(contextMenu.taskId); setContextMenu(null); }} className="w-full px-4 py-2 text-left text-[11px] font-bold text-red-400 hover:bg-[#252526] flex items-center gap-2"><Trash2 size={12}/> Delete Everywhere</button>
         </div>
       )}
-      <Modal isOpen={isPropertyModalOpen} onClose={() => setIsPropertyModalOpen(false)} title="Master Task Definitions">
+      <Modal isOpen={isPropertyModalOpen} onClose={() => setIsPropertyModalOpen(false)} title="Master Task Definitions" maxWidth="750px">
         <div className="space-y-4 p-1">
           <div className="flex gap-2 pb-4 border-b border-[#1a1a1a]">
             <button onClick={() => addMasterTask('habit')} className="flex-1 py-2 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-500 hover:text-white hover:border-[#3d3d3d] transition-all"><Plus size={14}/> <span className="text-[8px] font-black uppercase">Habit</span></button>
@@ -1479,7 +1479,7 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
       {expanded && task.type === 'habit' && onUpdate && (
         <div className="p-4 pt-2 border-t border-[#2d2d2d] mt-1 space-y-4 text-left">
           {/* Main Task Settings */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Main Task Base Points</span>
               <input 
@@ -1504,7 +1504,7 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 border-t border-[#2d2d2d]/50 pt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-[#2d2d2d]/50 pt-3">
             <div className="flex flex-col gap-1">
               <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Reward Mode</span>
               <select
