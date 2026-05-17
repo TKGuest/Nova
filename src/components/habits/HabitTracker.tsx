@@ -184,24 +184,38 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       const stats = statsSnap.data() as any;
       const today = parseISO(dateStr);
       let updates: any = {};
+
+      const now = new Date();
+      const activeBuffs = (stats.equippedBuffs || []).filter((b: any) => new Date(b.expiresAt) > now);
+      const hasHolidayPass = activeBuffs.some((b: any) => b.name.toLowerCase().includes('holiday pass'));
+      const hasStreakInsurance = activeBuffs.some((b: any) => b.name.toLowerCase().includes('streak insurance'));
       
       // Decay points if it's been more than a day
       if (stats.lastDecayDate) {
         const lastDecay = parseISO(stats.lastDecayDate);
         if (isAfter(startOfDay(today), startOfDay(lastDecay))) {
-          // It's a new day! Apply decay: Let's say 5 points per day.
           const diffDays = Math.floor((today.getTime() - lastDecay.getTime()) / (1000 * 60 * 60 * 24));
           if (diffDays > 0) {
-            updates.points = stats.points - (diffDays * 5); // 5 points decay per day, can go negative
+            // Clean expired buffs from stats on day transition
+            updates.equippedBuffs = activeBuffs;
+
+            // If Holiday Pass is active, skip all decays and resets completely!
+            if (hasHolidayPass) {
+              updates.lastDecayDate = dateStr;
+              await updateDoc(statsRef, updates);
+              return;
+            }
+
+            updates.points = stats.points - (diffDays * 5); // 5 points decay per day
             updates.lastDecayDate = dateStr;
             
             if (updates.points < 0) updates.debt = true;
             
-            // Decay streaks for each task!
             const taskStreaks = { ...(stats.taskStreaks || {}) };
+            let insuranceConsumed = false;
             
             if (diffDays > 1) {
-              // Missed multiple days, reset all streaks!
+              // Missed multiple days, reset all streaks
               Object.keys(taskStreaks).forEach(taskId => {
                 taskStreaks[taskId] = {
                   streak: 0,
@@ -217,17 +231,26 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               const yesterdayData = yesterdayRecSnap.exists() ? (yesterdayRecSnap.data()?.data || {}) : {};
 
               Object.keys(taskStreaks).forEach(taskId => {
-                // If not completed yesterday, reset streak to 0, multiplier to 1.0
+                // If not completed yesterday, check Streak Insurance
                 if (!yesterdayData[taskId]) {
-                  taskStreaks[taskId] = {
-                    streak: 0,
-                    multiplier: 1.0,
-                    lastCompletedDate: taskStreaks[taskId]?.lastCompletedDate || ''
-                  };
+                  if (hasStreakInsurance) {
+                    insuranceConsumed = true; // Streak Insurance protects it!
+                  } else {
+                    taskStreaks[taskId] = {
+                      streak: 0,
+                      multiplier: 1.0,
+                      lastCompletedDate: taskStreaks[taskId]?.lastCompletedDate || ''
+                    };
+                  }
                 }
               });
             }
             updates.taskStreaks = taskStreaks;
+
+            if (insuranceConsumed) {
+              // Consume Streak Insurance (remove it from equipped buffs)
+              updates.equippedBuffs = activeBuffs.filter((b: any) => !b.name.toLowerCase().includes('streak insurance'));
+            }
           }
         }
       } else {
@@ -440,6 +463,38 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     }
   };
 
+  const getDateHeaderClasses = () => {
+    switch (textSize) {
+      case 'medium': return 'text-[10px] md:text-[11px]';
+      case 'large': return 'text-[12px] md:text-[13px]';
+      default: return 'text-[8px] md:text-[9.5px]';
+    }
+  };
+
+  const getDateValClasses = () => {
+    switch (textSize) {
+      case 'medium': return 'text-[13px] md:text-[14px]';
+      case 'large': return 'text-[16px] md:text-[17px]';
+      default: return 'text-[10.5px] md:text-[12px]';
+    }
+  };
+
+  const getSectionTitleClasses = () => {
+    switch (textSize) {
+      case 'medium': return 'text-[9px] md:text-[10px]';
+      case 'large': return 'text-[11px] md:text-[12px]';
+      default: return 'text-[7px] md:text-[8.5px]';
+    }
+  };
+
+  const getSectionContentClasses = () => {
+    switch (textSize) {
+      case 'medium': return 'text-[11px] md:text-[12px]';
+      case 'large': return 'text-[13px] md:text-[14px]';
+      default: return 'text-[9px] md:text-[10.5px]';
+    }
+  };
+
   const handleBuyItem = async (item: ShopItem) => {
     if (!user || !gamificationStats) return;
     if (gamificationStats.debt || gamificationStats.points < item.cost) {
@@ -460,14 +515,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         
         let newItems = [...inventory];
         if (existingItem) {
-          newItems = newItems.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1, costPurchased: item.cost } : i);
+          newItems = newItems.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1, costPurchased: item.cost, durationHours: item.durationHours || i.durationHours } : i);
         } else {
           newItems.push({
             id: item.id,
             name: item.name,
             type: item.type,
             quantity: 1,
-            costPurchased: item.cost
+            costPurchased: item.cost,
+            durationHours: item.durationHours || 0
           });
         }
         
@@ -503,6 +559,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   const handleDeleteShopItem = async (itemId: string) => {
     if (!user) return;
+    const item = shopItems.find(i => i.id === itemId);
+    if (item) {
+      const nameLower = item.name.toLowerCase();
+      if (nameLower.includes('streak insurance') || nameLower.includes('holiday pass')) {
+        showToast('System items cannot be deleted!', 'error');
+        return;
+      }
+    }
     customConfirm({
       title: 'Delete Shop Item?',
       message: 'Are you sure you want to remove this item from the shop permanently?',
@@ -532,12 +596,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isGamificationOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
             >
               <Gamepad2 size={14}/> Gamify
-            </button>
-            <button 
-              onClick={() => setIsShopOpen(true)} 
-              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isShopOpen ? 'bg-yellow-600 text-black font-black' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-yellow-500 border-yellow-900/30'}`}
-            >
-              <ShoppingBag size={14}/> Shop
             </button>
             <div className="relative">
               <button 
@@ -601,15 +659,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       recordId={record.id} 
                       coverImage={record.coverImage} 
                     />
-                    <div className="flex flex-col gap-1 border-b border-[#1a1a1a] pb-6 mb-2">
-                      <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${isSameDay(dateObj, new Date()) ? 'text-blue-500' : 'text-gray-600'}`}>
+                    <div className="flex flex-col gap-1 border-b border-[#1a1a1a] pb-6 mb-2 text-left">
+                      <span className={`font-black uppercase tracking-[0.3em] ${getDateHeaderClasses()} ${isSameDay(dateObj, new Date()) ? 'text-blue-500' : 'text-gray-600'}`}>
                         {isSameDay(dateObj, new Date()) ? '@Today' : isSameDay(dateObj, subDays(new Date(), 1)) ? '@Yesterday' : `@${format(dateObj, 'EEEE')}`}
                       </span>
-                      <h2 className="text-2xl font-bold text-white tracking-tight">{format(dateObj, 'MMMM d, yyyy')}</h2>
+                      <h2 className={`font-bold text-white tracking-tight ${textSize === 'large' ? 'text-3xl' : textSize === 'medium' ? 'text-2xl' : 'text-xl'}`}>{format(dateObj, 'MMMM d, yyyy')}</h2>
                     </div>
 
                     <div className="flex-1 space-y-1">
-                      <h3 className="text-[10px] font-black uppercase text-gray-700 tracking-widest mb-4 px-1">Daily Habits</h3>
+                      <h3 className={`font-black uppercase text-gray-700 tracking-widest mb-4 px-1 ${getSectionTitleClasses()}`}>Daily Habits</h3>
                       <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-0.5">
                           {masterTasks.filter(t => t.type === 'habit').map(task => (
@@ -720,10 +778,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             </div>
                             <div className="p-2 pb-1.5 border-b border-[#1a1a1a] bg-[#222]/30 flex justify-between items-start">
                               <div>
-                                <span className={`text-[8px] font-black uppercase tracking-[0.2em] mb-0.5 block ${isSameDay(dateObj, new Date()) ? 'text-blue-400' : 'text-gray-600'}`}>
+                                <span className={`font-black uppercase tracking-[0.2em] mb-0.5 block ${getDateHeaderClasses()} ${isSameDay(dateObj, new Date()) ? 'text-blue-400' : 'text-gray-600'}`}>
                                    {isSameDay(dateObj, new Date()) ? '@Today' : isSameDay(dateObj, subDays(new Date(), 1)) ? '@Yesterday' : `@${format(dateObj, 'EEEE')}`}
                                 </span>
-                                <h3 className="font-bold text-white text-[10px] tracking-tight">{format(dateObj, 'MMM d, yyyy')}</h3>
+                                <h3 className={`font-bold text-white tracking-tight ${getDateValClasses()}`}>{format(dateObj, 'MMM d, yyyy')}</h3>
                               </div>
                               <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: record.id, label: format(dateObj, 'MMM d') }); }} className="opacity-0 group-hover/card:opacity-100 p-1 text-gray-700 hover:text-red-500 transition-all"><Trash2 size={11}/></button>
                             </div>
@@ -757,15 +815,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                               <div className="mt-auto pt-2 space-y-2 border-t border-[#1a1a1a]/30">
                                 {masterTasks.filter(t => t.type === 'counter').map(t => (
                                   <div key={t.id} className="px-1.5 py-1 bg-[#161616] rounded border border-[#1a1a1a] flex justify-between items-center">
-                                    <span className="text-[7px] font-black uppercase text-gray-600 tracking-widest">{t.name}</span>
-                                    <span className={`font-black text-blue-500/80 ${textSize === 'large' ? 'text-[10px]' : 'text-[9px]'}`}>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
+                                    <span className={`font-black uppercase text-gray-600 tracking-widest ${getSectionTitleClasses()}`}>{t.name}</span>
+                                    <span className={`font-black text-blue-500/80 ${getSectionContentClasses()}`}>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
                                   </div>
                                 ))}
                                 {masterTasks.filter(t => t.type === 'notes').map(t => (
                                   <div key={t.id} onClick={(e) => e.stopPropagation()} className={`px-1.5 py-1.5 bg-[#161616] rounded border border-[#1a1a1a] space-y-1 ${!isPeek ? 'hidden md:block' : ''}`}>
-                                    <span className="text-[7px] font-black uppercase text-gray-600 tracking-widest block">{t.name}</span>
+                                    <span className={`font-black uppercase text-gray-600 tracking-widest block ${getSectionTitleClasses()}`}>{t.name}</span>
                                     <textarea 
-                                      className={`w-full bg-transparent text-gray-400 placeholder:text-gray-800 outline-none resize-none p-0 border-none leading-tight ${textSize === 'large' ? 'text-[9px]' : 'text-[8px]'}`} 
+                                      className={`w-full bg-transparent text-gray-400 placeholder:text-gray-800 outline-none resize-none p-0 border-none leading-tight ${getSectionContentClasses()}`} 
                                       placeholder="Daily log..." 
                                       defaultValue={record.notes || ''} 
                                       onClick={(e) => e.stopPropagation()}
@@ -984,13 +1042,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             >
                               <Edit2 size={13} />
                             </button>
-                            <button 
-                              onClick={() => handleDeleteShopItem(item.id)} 
-                              className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
-                              title="Delete Item"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            {!(item.name.toLowerCase().includes('streak insurance') || item.name.toLowerCase().includes('holiday pass')) && (
+                              <button 
+                                onClick={() => handleDeleteShopItem(item.id)} 
+                                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                                title="Delete Item"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <button 
@@ -1312,13 +1372,16 @@ function ShopItemFormModal({
           </div>
         </div>
 
-        {type === 'buff' && (
+        {(type === 'buff' || type === 'timer') && (
           <div>
-            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Buff Duration (Hours)</label>
+            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">
+              {type === 'buff' ? 'Buff Duration (Hours)' : 'Timer Duration (Hours)'}
+            </label>
             <input 
               type="number" 
+              step="any"
               value={durationHours} 
-              onChange={(e) => setDurationHours(Math.max(1, parseFloat(e.target.value) || 0))} 
+              onChange={(e) => setDurationHours(Math.max(0.01, parseFloat(e.target.value) || 0))} 
               className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50" 
             />
           </div>
