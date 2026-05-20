@@ -1554,7 +1554,7 @@ function SortableMasterItem(props: any) {
         </button>
 
         {isExpanded && children.length > 0 && (
-          <div className="ml-3 space-y-0.5 mt-0.5">
+          <div className="space-y-0.5 mt-0.5">
             <SortableContext items={children.map((c: any) => `${recordId}::${c.id}`)} strategy={verticalListSortingStrategy}>
               {children.map((child: any) => (
                 <SortableMasterItem
@@ -1570,7 +1570,7 @@ function SortableMasterItem(props: any) {
         )}
 
         {isExpanded && children.length === 0 && (
-          <div className="ml-3 py-1 text-[10px] text-gray-700 italic">Empty group</div>
+          <div className="py-1 text-[10px] text-gray-700 italic">Empty group</div>
         )}
       </div>
     );
