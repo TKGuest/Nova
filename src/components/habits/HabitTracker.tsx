@@ -36,6 +36,9 @@ interface MasterTask {
   rewardMode?: 'main_only' | 'subtasks_separately';
   subTaskPoints?: number;
   bonusPoints?: number;
+  // Toggle List styling
+  labelColor?: string;
+  labelBold?: boolean;
 }
 
 interface PageRecord {
@@ -1504,18 +1507,29 @@ function SortableMasterItem(props: any) {
   if (task.type === 'toggle_list') {
     const children = (allTasks || []).filter((t: any) => t.parentId === task.id && t.type === 'habit');
     const recordId = id.split('::')[0];
-    
+
+    // Scale the toggle header label proportionally with the user's text size setting
+    const labelSizeClass = textSizeClass.includes('text-[18px]')
+      ? 'text-[11px]'
+      : textSizeClass.includes('text-[15px]')
+      ? 'text-[10px]'
+      : 'text-[9px]';
+
+    const labelColor = task.labelColor || '#4b5563'; // default gray-600
+    const labelFontWeight = task.labelBold ? 'font-black' : 'font-semibold';
+
     return (
       <div ref={setNodeRef} style={style} className="flex flex-col mt-3 mb-0.5">
-        {/* Section divider header - compact and subtle */}
+        {/* Section divider header */}
         <button
-          onClick={toggleExpanded}
-          onContextMenu={onContextMenu}
+          onClick={(e) => { e.stopPropagation(); toggleExpanded(); }}
+          onContextMenu={(e) => { e.stopPropagation(); onContextMenu(e); }}
           className="flex items-center gap-1.5 w-full group/toggle py-1 px-1 rounded hover:bg-[#1a1a1a] transition-colors"
         >
           <ChevronDown
             size={11}
-            className={`transition-transform duration-200 text-gray-600 shrink-0 ${!isExpanded ? '-rotate-90' : ''}`}
+            className={`transition-transform duration-200 shrink-0 ${!isExpanded ? '-rotate-90' : ''}`}
+            style={{ color: labelColor }}
           />
           {isEditing ? (
             <input
@@ -1525,14 +1539,18 @@ function SortableMasterItem(props: any) {
               onBlur={() => onRename(tempName)}
               onKeyDown={e => { if (e.key === 'Enter') onRename(tempName); }}
               onClick={e => e.stopPropagation()}
-              className="bg-transparent outline-none border-b border-purple-500/60 text-[9px] font-black uppercase tracking-[0.2em] text-gray-500 flex-1 min-w-0"
+              className={`bg-transparent outline-none border-b border-purple-500/60 uppercase tracking-[0.2em] flex-1 min-w-0 ${labelSizeClass} ${labelFontWeight}`}
+              style={{ color: labelColor }}
             />
           ) : (
-            <span className={`text-[9px] font-black uppercase tracking-[0.2em] text-gray-600 group-hover/toggle:text-gray-500 transition-colors flex-1 text-left min-w-0 ${textTruncateMode === 'truncate' ? 'truncate' : ''}`}>
+            <span
+              className={`uppercase tracking-[0.2em] transition-colors flex-1 text-left min-w-0 ${labelSizeClass} ${labelFontWeight} ${textTruncateMode === 'truncate' ? 'truncate' : ''}`}
+              style={{ color: labelColor }}
+            >
               {task.name}
             </span>
           )}
-          <div className="flex-1 h-[1px] bg-[#2a2a2a] ml-1" />
+          <div className="flex-1 h-[1px] ml-1" style={{ backgroundColor: `${labelColor}33` }} />
         </button>
 
         {isExpanded && children.length > 0 && (
@@ -1657,7 +1675,7 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
           onBlur={(e) => onRename(task.id, (e.target as HTMLInputElement).value)}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         />
-        {(task.type === 'habit' || task.type !== 'toggle_list') && onUpdate && (
+        {onUpdate && (
           <button onClick={() => setExpanded(!expanded)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors shrink-0">
             <Settings size={16} />
           </button>
@@ -1669,7 +1687,55 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
 
       {expanded && onUpdate && (
         <div className="p-5 pt-2 border-t border-[#2d2d2d] mt-1 space-y-4 text-left">
-          {/* Global Property Settings */}
+          {/* Toggle List Appearance Settings */}
+          {task.type === 'toggle_list' && (
+            <div className="space-y-4 pb-3 border-b border-[#2d2d2d]/50">
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Label Color</span>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'Gray', value: '' },
+                    { label: 'Purple', value: '#a855f7' },
+                    { label: 'Blue', value: '#3b82f6' },
+                    { label: 'Cyan', value: '#06b6d4' },
+                    { label: 'Green', value: '#22c55e' },
+                    { label: 'Yellow', value: '#eab308' },
+                    { label: 'Orange', value: '#f97316' },
+                    { label: 'Red', value: '#ef4444' },
+                    { label: 'Pink', value: '#ec4899' },
+                    { label: 'White', value: '#e5e7eb' },
+                  ].map(({ label, value }) => {
+                    const activeColor = value || '#4b5563';
+                    const isActive = (task.labelColor || '') === value;
+                    return (
+                      <button
+                        key={label}
+                        title={label}
+                        onClick={() => onUpdate(task.id, { labelColor: value || null })}
+                        className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${isActive ? 'border-white scale-110' : 'border-transparent'}`}
+                        style={{ backgroundColor: activeColor }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Bold Label</span>
+                <button
+                  onClick={() => onUpdate(task.id, { labelBold: !task.labelBold })}
+                  className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-all ${
+                    task.labelBold
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-[#111] border border-[#2d2d2d] text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {task.labelBold ? 'On' : 'Off'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Global Property Settings - Parent List (non toggle_list only) */}
           {task.type !== 'toggle_list' && toggleLists.length > 0 && (
             <div className="flex flex-col gap-1 pb-3 border-b border-[#2d2d2d]/50">
               <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Parent List</span>
