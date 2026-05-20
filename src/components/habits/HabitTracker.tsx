@@ -18,7 +18,7 @@ import { LexoRank } from 'lexorank';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { GamificationDashboard } from './GamificationDashboard';
 
-type PropertyType = 'habit' | 'counter' | 'notes';
+type PropertyType = 'habit' | 'counter' | 'notes' | 'toggle_list';
 type TextSize = 'small' | 'medium' | 'large';
 
 interface MasterTask {
@@ -26,6 +26,7 @@ interface MasterTask {
   name: string;
   sortOrder: string;
   type: PropertyType;
+  parentId?: string | null;
   
   // Gamification & Sub-tasks
   pointsValue?: number;
@@ -92,6 +93,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   // Lock body scroll when modals/drawers are open on mobile
   useEffect(() => {
     const isModalOpen = !!sidePeekRecordId || isShopOpen || isPropertyModalOpen || isDefaultCoverModalOpen || isDatePickerOpen !== null || newItemModal || !!editingItem;
+    const scrollContainer = document.getElementById('main-scroll-container');
+    
     if (isModalOpen) {
       const scrollY = window.scrollY;
       document.body.style.position = 'fixed';
@@ -99,6 +102,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
+      if (scrollContainer) {
+        scrollContainer.style.overflowY = 'hidden';
+      }
     } else {
       const scrollY = document.body.style.top;
       document.body.style.position = '';
@@ -106,6 +112,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       document.body.style.width = '';
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
+      if (scrollContainer) {
+        scrollContainer.style.overflowY = 'auto';
+      }
       if (scrollY) {
         window.scrollTo(0, parseInt(scrollY || '0') * -1);
       }
@@ -116,6 +125,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       document.body.style.width = '';
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
+      if (scrollContainer) {
+        scrollContainer.style.overflowY = 'auto';
+      }
     };
   }, [sidePeekRecordId, isShopOpen, isPropertyModalOpen, isDefaultCoverModalOpen, isDatePickerOpen, newItemModal, editingItem]);
 
@@ -703,13 +715,24 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (!over || active.id === over.id || !user) return;
     const activeTaskId = active.id.toString().split('::')[1];
     const overTaskId = over.id.toString().split('::')[1];
-    const oldIndex = masterTasks.findIndex(t => t.id === activeTaskId);
-    const newIndex = masterTasks.findIndex(t => t.id === overTaskId);
-    const newOrder = arrayMove(masterTasks, oldIndex, newIndex);
+    
+    const activeTask = masterTasks.find(t => t.id === activeTaskId);
+    const overTask = masterTasks.find(t => t.id === overTaskId);
+    if (!activeTask || !overTask) return;
+
+    // Optional: Only allow reordering within the same parent boundary in the dashboard drag
+    if (activeTask.parentId !== overTask.parentId) return;
+
+    const listToReorder = masterTasks.filter(t => t.parentId === activeTask.parentId);
+    const oldIndex = listToReorder.findIndex(t => t.id === activeTaskId);
+    const newIndex = listToReorder.findIndex(t => t.id === overTaskId);
+    const newOrder = arrayMove(listToReorder, oldIndex, newIndex);
+    
     let sortOrder;
     if (newIndex === 0) sortOrder = safeParse(newOrder[1]?.sortOrder).genPrev().toString();
     else if (newIndex === newOrder.length - 1) sortOrder = safeParse(newOrder[newIndex-1]?.sortOrder).genNext().toString();
     else sortOrder = safeParse(newOrder[newIndex-1]?.sortOrder).between(safeParse(newOrder[newIndex+1]?.sortOrder)).toString();
+    
     await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', activeTaskId), { sortOrder });
   };
 
@@ -972,11 +995,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <h3 className={`font-black uppercase text-gray-700 tracking-widest mb-4 px-1 ${getSectionTitleClasses()}`}>Daily Habits</h3>
                       <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-0.5">
-                          {masterTasks.filter(t => t.type === 'habit').map(task => (
+                          {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list')).map(task => (
                               <SortableMasterItem 
                                 key={task.id} 
                                 id={`${record.id}::${task.id}`} 
                                 task={task} 
+                                allTasks={masterTasks}
                                 completed={!!record.data?.[task.id]} 
                                 recordData={record.data || {}}
                                 isPeek={true}
@@ -1087,11 +1111,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             <div className="p-1 flex-1 flex flex-col">
                               <div className="space-y-0 min-h-[40px]">
                                 <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
-                                  {masterTasks.filter(t => t.type === 'habit').map(task => (
+                                  {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list')).map(task => (
                                     <SortableMasterItem 
                                       key={task.id} 
                                       id={`${record.id}::${task.id}`} 
                                       task={task} 
+                                      allTasks={masterTasks}
                                       completed={!!record.data?.[task.id]} 
                                       recordData={record.data || {}}
                                       isPeek={false}
@@ -1147,7 +1172,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 <thead>
                   <tr className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
                     <th className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-600 border-r border-[#1a1a1a] w-[180px]">Date Record</th>
-                     {masterTasks.filter(t => t.type !== 'notes').map(task => {
+                     {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list').map(task => {
                        const streak = gamificationStats?.taskStreaks?.[task.id]?.streak || 0;
                        return (
                          <th key={task.id} className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-500 min-w-[120px] text-center">
@@ -1170,7 +1195,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                     return (
                       <tr key={record.id} className="border-b border-[#1a1a1a] hover:bg-[#161616] transition-colors group/row">
                         <td className={`p-4 font-bold text-gray-400 border-r border-[#1a1a1a] ${getTextClasses()}`}>{format(parseISO(record.date), 'EEE, MMM d')}</td>
-                        {masterTasks.filter(t => t.type !== 'notes').map(task => (
+                        {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list').map(task => (
                           <td key={task.id} className="p-2 text-center border-r border-[#1a1a1a]/50">
                             {task.type === 'habit' ? (
                               <div className={getCheckboxScale()}><Checkbox checked={!!record.data?.[task.id]} onClick={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} /></div>
@@ -1221,6 +1246,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             <button onClick={() => addMasterTask('habit')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><Plus size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Habit</span></button>
             <button onClick={() => addMasterTask('counter')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><Activity size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Counter</span></button>
             <button onClick={() => addMasterTask('notes')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><StickyNote size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Notes</span></button>
+            <button onClick={() => addMasterTask('toggle_list')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><ChevronDown size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Toggle List</span></button>
           </div>
           <div className="space-y-2">
             <DndContext
@@ -1241,7 +1267,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             >
               <SortableContext items={masterTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                 {masterTasks.map(task => (
-                  <SortableModalRow key={task.id} task={task} onDelete={deleteMasterTask} onRename={(id, name) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), { name })} onUpdate={(id, updates) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)} />
+                  <SortableModalRow key={task.id} task={task} allTasks={masterTasks} onDelete={deleteMasterTask} onRename={(id, name) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), { name })} onUpdate={(id, updates) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)} />
                 ))}
               </SortableContext>
             </DndContext>
@@ -1434,22 +1460,24 @@ function DatePickerModal({ isOpen, onClose, onSelect, initialDate }: any) {
   );
 }
 
-function SortableMasterItem({ 
-  id, 
-  task, 
-  completed, 
-  onToggle, 
-  onToggleSubTask, 
-  recordData, 
-  isPeek, 
-  streak = 0, 
-  onContextMenu, 
-  isEditing, 
-  onRename, 
-  textSizeClass, 
-  checkboxScale,
-  textTruncateMode = 'wrap'
-}: any) {
+function SortableMasterItem(props: any) {
+  const { 
+    id, 
+    task, 
+    allTasks,
+    completed, 
+    onToggle, 
+    onToggleSubTask, 
+    recordData, 
+    isPeek, 
+    streak = 0, 
+    onContextMenu, 
+    isEditing, 
+    onRename, 
+    textSizeClass, 
+    checkboxScale,
+    textTruncateMode = 'wrap'
+  } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !isPeek });
   const style = isPeek ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 } : {};
   const [tempName, setTempName] = useState(task.name);
@@ -1472,10 +1500,60 @@ function SortableMasterItem({
   const inputRef = useRef<HTMLInputElement>(null);
   
   useEffect(() => { if (isEditing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [isEditing]);
+  
+  if (task.type === 'toggle_list') {
+    const children = (allTasks || []).filter((t: any) => t.parentId === task.id && t.type === 'habit');
+    const recordId = id.split('::')[0];
+    
+    return (
+      <div ref={setNodeRef} style={style} className="flex flex-col mt-4 group">
+        <div className="flex items-center gap-2 py-3 px-1">
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-700 hover:text-gray-400 touch-none px-1">
+            <GripVertical size={16} />
+          </div>
+          <button onClick={toggleExpanded} className="p-1 text-gray-500 hover:text-white transition-colors">
+            <ChevronDown size={18} className={`transition-transform duration-200 ${!isExpanded ? '-rotate-90' : ''}`} />
+          </button>
+          {isEditing ? (
+            <input 
+              ref={inputRef} 
+              value={tempName} 
+              onChange={e => setTempName(e.target.value)} 
+              onBlur={() => onRename(tempName)} 
+              onKeyDown={e => { if (e.key === 'Enter') onRename(tempName); }} 
+              className={`bg-transparent outline-none border-b border-purple-500 font-black text-white uppercase tracking-widest flex-1 ${textSizeClass}`} 
+            />
+          ) : (
+            <span 
+              onContextMenu={onContextMenu} 
+              className={`font-black text-white uppercase tracking-widest flex-1 cursor-context-menu ${textTruncateMode === 'truncate' ? 'truncate whitespace-nowrap overflow-hidden block' : 'whitespace-normal break-words'} ${textSizeClass}`}
+            >
+              {task.name}
+            </span>
+          )}
+        </div>
+        {isExpanded && children.length > 0 && (
+          <div className="ml-6 pl-2 border-l border-[#2d2d2d] space-y-0.5 mt-1">
+            <SortableContext items={children.map((c: any) => `${recordId}::${c.id}`)} strategy={verticalListSortingStrategy}>
+              {children.map((child: any) => (
+                <SortableMasterItem 
+                  key={child.id} 
+                  {...props} 
+                  id={`${recordId}::${child.id}`} 
+                  task={child} 
+                  completed={!!recordData?.[child.id]} 
+                />
+              ))}
+            </SortableContext>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (task.type !== 'habit') return null;
   
   const hasSubtasks = task.subTasks && task.subTasks.length > 0;
-
   // Proportional sizing for subtasks inside the side peek vs main cards list
   const subTextSizeClass = isPeek
     ? (textSizeClass.includes('text-[19px]') ? 'text-[15px]' : textSizeClass.includes('text-[17px]') ? 'text-[14px]' : 'text-[13px]')
@@ -1548,12 +1626,14 @@ function SortableMasterItem({
   );
 }
 
-function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: MasterTask; onDelete: (id: string) => void; onRename: (id: string, name: string) => void; onUpdate?: (id: string, updates: any) => void; }) {
+function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { task: MasterTask; allTasks: MasterTask[]; onDelete: (id: string) => void; onRename: (id: string, name: string) => void; onUpdate?: (id: string, updates: any) => void; }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
-  const Icon = task.type === 'notes' ? StickyNote : task.type === 'counter' ? Activity : Check;
+  const Icon = task.type === 'notes' ? StickyNote : task.type === 'counter' ? Activity : task.type === 'toggle_list' ? ChevronDown : Check;
   const [expanded, setExpanded] = useState(false);
   const [newSubTask, setNewSubTask] = useState('');
+
+  const toggleLists = allTasks.filter(t => t.type === 'toggle_list' && t.id !== task.id);
 
   return (
     <div ref={setNodeRef} style={style} className="flex flex-col bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] hover:border-[#3d3d3d] group">
@@ -1570,7 +1650,7 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
           onBlur={(e) => onRename(task.id, (e.target as HTMLInputElement).value)}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         />
-        {task.type === 'habit' && onUpdate && (
+        {(task.type === 'habit' || task.type !== 'toggle_list') && onUpdate && (
           <button onClick={() => setExpanded(!expanded)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors shrink-0">
             <Settings size={16} />
           </button>
@@ -1580,10 +1660,29 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
         </button>
       </div>
 
-      {expanded && task.type === 'habit' && onUpdate && (
+      {expanded && onUpdate && (
         <div className="p-5 pt-2 border-t border-[#2d2d2d] mt-1 space-y-4 text-left">
-          {/* Main Task Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Global Property Settings */}
+          {task.type !== 'toggle_list' && toggleLists.length > 0 && (
+            <div className="flex flex-col gap-1 pb-3 border-b border-[#2d2d2d]/50">
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Parent List</span>
+              <select
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                value={task.parentId || ''}
+                onChange={(e) => onUpdate(task.id, { parentId: e.target.value || null })}
+              >
+                <option value="">None (Root Level)</option>
+                {toggleLists.map(tl => (
+                  <option key={tl.id} value={tl.id}>{tl.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Main Task Settings (Habits only) */}
+          {task.type === 'habit' && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
                 {task.rewardMode === 'subtasks_separately' ? 'Main Task Completion Bonus' : 'Main Task Base Points'}
@@ -1628,7 +1727,20 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
             <div className="space-y-1.5 mt-1 max-h-40 overflow-y-auto custom-scrollbar">
               {(task.subTasks || []).map((sub: any) => (
                 <div key={sub.id} className="flex items-center gap-3 px-3 py-2 bg-[#111] rounded border border-[#2d2d2d] hover:border-[#333] transition-colors">
-                  <span className="text-[12.5px] font-medium text-gray-200 flex-1">{sub.title}</span>
+                  <input 
+                    type="text"
+                    className="text-[12.5px] font-medium text-gray-200 flex-1 bg-transparent border-none outline-none focus:border-b focus:border-purple-500/50 transition-colors"
+                    defaultValue={sub.title}
+                    onBlur={(e) => {
+                      const newTitle = e.target.value.trim();
+                      if (!newTitle) return;
+                      const newSubs = task.subTasks!.map(s => s.id === sub.id ? { ...s, title: newTitle } : s);
+                      onUpdate(task.id, { subTasks: newSubs });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                  />
                   
                   {task.rewardMode === 'subtasks_separately' && (
                     <div className="flex items-center gap-1 shrink-0">
@@ -1675,6 +1787,8 @@ function SortableModalRow({ task, onDelete, onRename, onUpdate }: { task: Master
               />
             </div>
           </div>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -55,7 +55,7 @@ export default function DynamicPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-[#1e1e1e]">
-      <div className="flex-1 w-full overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
+      <div id="main-scroll-container" className="flex-1 w-full overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
         <CoverImage pageId={pageId} coverImage={pageMeta.coverImage} />
         <div className="w-full px-4 md:px-10 py-8">
           <h1 className="text-4xl font-bold text-foreground mb-8 outline-none break-words overflow-hidden">
