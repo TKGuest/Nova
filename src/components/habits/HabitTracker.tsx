@@ -1626,7 +1626,7 @@ function SortableMasterItem(props: any) {
       </div>
 
       {isExpanded && hasSubtasks && (
-        <div className="ml-8 pl-2 border-l-2 border-[#1a1a1a] mt-1 space-y-1">
+        <div className="ml-[11px] pl-[9px] border-l border-[#2d2d2d]/40 mt-1 space-y-1">
           {task.subTasks.map((sub: any) => {
             const subKey = `${task.id}_${sub.id}`;
             const subCompleted = !!recordData?.[subKey];
