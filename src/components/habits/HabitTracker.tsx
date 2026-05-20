@@ -1506,46 +1506,53 @@ function SortableMasterItem(props: any) {
     const recordId = id.split('::')[0];
     
     return (
-      <div ref={setNodeRef} style={style} className="flex flex-col mt-4 group">
-        <div className="flex items-center gap-2 py-3 px-1">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-700 hover:text-gray-400 touch-none px-1">
-            <GripVertical size={16} />
-          </div>
-          <button onClick={toggleExpanded} className="p-1 text-gray-500 hover:text-white transition-colors">
-            <ChevronDown size={18} className={`transition-transform duration-200 ${!isExpanded ? '-rotate-90' : ''}`} />
-          </button>
+      <div ref={setNodeRef} style={style} className="flex flex-col mt-3 mb-0.5">
+        {/* Section divider header - compact and subtle */}
+        <button
+          onClick={toggleExpanded}
+          onContextMenu={onContextMenu}
+          className="flex items-center gap-1.5 w-full group/toggle py-1 px-1 rounded hover:bg-[#1a1a1a] transition-colors"
+        >
+          <ChevronDown
+            size={11}
+            className={`transition-transform duration-200 text-gray-600 shrink-0 ${!isExpanded ? '-rotate-90' : ''}`}
+          />
           {isEditing ? (
-            <input 
-              ref={inputRef} 
-              value={tempName} 
-              onChange={e => setTempName(e.target.value)} 
-              onBlur={() => onRename(tempName)} 
-              onKeyDown={e => { if (e.key === 'Enter') onRename(tempName); }} 
-              className={`bg-transparent outline-none border-b border-purple-500 font-black text-white uppercase tracking-widest flex-1 ${textSizeClass}`} 
+            <input
+              ref={inputRef}
+              value={tempName}
+              onChange={e => setTempName(e.target.value)}
+              onBlur={() => onRename(tempName)}
+              onKeyDown={e => { if (e.key === 'Enter') onRename(tempName); }}
+              onClick={e => e.stopPropagation()}
+              className="bg-transparent outline-none border-b border-purple-500/60 text-[9px] font-black uppercase tracking-[0.2em] text-gray-500 flex-1 min-w-0"
             />
           ) : (
-            <span 
-              onContextMenu={onContextMenu} 
-              className={`font-black text-white uppercase tracking-widest flex-1 cursor-context-menu ${textTruncateMode === 'truncate' ? 'truncate whitespace-nowrap overflow-hidden block' : 'whitespace-normal break-words'} ${textSizeClass}`}
-            >
+            <span className={`text-[9px] font-black uppercase tracking-[0.2em] text-gray-600 group-hover/toggle:text-gray-500 transition-colors flex-1 text-left min-w-0 ${textTruncateMode === 'truncate' ? 'truncate' : ''}`}>
               {task.name}
             </span>
           )}
-        </div>
+          <div className="flex-1 h-[1px] bg-[#2a2a2a] ml-1" />
+        </button>
+
         {isExpanded && children.length > 0 && (
-          <div className="ml-6 pl-2 border-l border-[#2d2d2d] space-y-0.5 mt-1">
+          <div className="ml-3 space-y-0.5 mt-0.5">
             <SortableContext items={children.map((c: any) => `${recordId}::${c.id}`)} strategy={verticalListSortingStrategy}>
               {children.map((child: any) => (
-                <SortableMasterItem 
-                  key={child.id} 
-                  {...props} 
-                  id={`${recordId}::${child.id}`} 
-                  task={child} 
-                  completed={!!recordData?.[child.id]} 
+                <SortableMasterItem
+                  key={child.id}
+                  {...props}
+                  id={`${recordId}::${child.id}`}
+                  task={child}
+                  completed={!!recordData?.[child.id]}
                 />
               ))}
             </SortableContext>
           </div>
+        )}
+
+        {isExpanded && children.length === 0 && (
+          <div className="ml-3 py-1 text-[10px] text-gray-700 italic">Empty group</div>
         )}
       </div>
     );
