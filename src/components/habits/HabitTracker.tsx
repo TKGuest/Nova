@@ -383,7 +383,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (!user) return;
     const id = `mtask_${Date.now()}`;
     const sortOrder = masterTasks.length > 0 ? safeParse(masterTasks[masterTasks.length - 1].sortOrder).genNext().toString() : LexoRank.middle().toString();
-    await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', id), { id, name: type === 'habit' ? 'New Task' : type === 'notes' ? 'Quick Notes' : 'Progress Counter', sortOrder, type });
+    
+    let defaultName = 'New Task';
+    if (type === 'notes') defaultName = 'Quick Notes';
+    else if (type === 'counter') defaultName = 'Progress Counter';
+    else if (type === 'toggle_list') defaultName = 'New Group';
+
+    await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', id), { id, name: defaultName, sortOrder, type });
   };
 
   const deleteMasterTask = async (id: string) => {
@@ -1554,29 +1560,35 @@ function SortableMasterItem(props: any) {
         </button>
 
         {isExpanded && children.length > 0 && (
-          <div 
-            className="ml-[9px] pl-[10px] border-l mt-0.5 space-y-0.5"
-            style={{ borderColor: `${labelColor}44` }}
-          >
-            <SortableContext items={children.map((c: any) => `${recordId}::${c.id}`)} strategy={verticalListSortingStrategy}>
-              {children.map((child: any) => (
-                <SortableMasterItem
-                  key={child.id}
-                  {...props}
-                  id={`${recordId}::${child.id}`}
-                  task={child}
-                  completed={!!recordData?.[child.id]}
-                />
-              ))}
-            </SortableContext>
+          <div className="relative mt-0.5 space-y-0.5">
+            {/* Absolute Bolder Vertical Line */}
+            <div 
+              className="absolute left-[9px] top-0 bottom-0 w-[2px] pointer-events-none rounded"
+              style={{ backgroundColor: labelColor }}
+            />
+            <div className="pl-0">
+              <SortableContext items={children.map((c: any) => `${recordId}::${c.id}`)} strategy={verticalListSortingStrategy}>
+                {children.map((child: any) => (
+                  <SortableMasterItem
+                    key={child.id}
+                    {...props}
+                    id={`${recordId}::${child.id}`}
+                    task={child}
+                    completed={!!recordData?.[child.id]}
+                  />
+                ))}
+              </SortableContext>
+            </div>
           </div>
         )}
 
         {isExpanded && children.length === 0 && (
-          <div 
-            className="ml-[9px] pl-[10px] border-l py-1 text-[10px] text-gray-700 italic"
-            style={{ borderColor: `${labelColor}33` }}
-          >
+          <div className="relative py-1 text-[10px] text-gray-700 italic pl-6">
+            {/* Absolute Bolder Vertical Line */}
+            <div 
+              className="absolute left-[9px] top-0 bottom-0 w-[2px] pointer-events-none rounded"
+              style={{ backgroundColor: labelColor }}
+            />
             Empty group
           </div>
         )}
