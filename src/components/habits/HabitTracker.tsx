@@ -600,6 +600,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const multiplier = stats.streakMultiplierActive !== false ? (currentTaskStreak.multiplier || 1.0) : 1.0;
     
     let pointsGained = 0;
+    let mainTaskBonusDelta = 0;
     
     // A. Reward Mode points for this sub-task
     if (task.rewardMode === 'subtasks_separately') {
@@ -621,10 +622,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       if (task.rewardMode !== 'subtasks_separately') {
         if (isAllComplete && !wasAllComplete) {
           const bonusBase = task.bonusPoints ?? 5;
-          pointsGained += Math.round(bonusBase * multiplier);
+          mainTaskBonusDelta = Math.round(bonusBase * multiplier);
+          pointsGained += mainTaskBonusDelta;
         } else if (!isAllComplete && wasAllComplete) {
           const bonusBase = task.bonusPoints ?? 5;
-          pointsGained -= Math.round(bonusBase * multiplier);
+          mainTaskBonusDelta = -Math.round(bonusBase * multiplier);
+          pointsGained += mainTaskBonusDelta;
         }
       }
       
@@ -635,9 +638,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         
         if (nextShouldBeComplete !== currentMainComplete) {
           nextRecordData[taskId] = nextShouldBeComplete;
-          const basePoints = task.pointsValue || 10;
-          const mainPointsChange = Math.round(basePoints * multiplier);
-          pointsGained += nextShouldBeComplete ? mainPointsChange : -mainPointsChange;
           
           const todayStr = format(new Date(), 'yyyy-MM-dd');
           const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
@@ -675,9 +675,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         
         if (nextShouldBeComplete !== currentMainComplete) {
           nextRecordData[taskId] = nextShouldBeComplete;
-          const basePoints = task.pointsValue || 10;
-          const mainPointsChange = Math.round(basePoints * multiplier);
-          pointsGained += nextShouldBeComplete ? mainPointsChange : -mainPointsChange;
           
           const todayStr = format(new Date(), 'yyyy-MM-dd');
           const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
@@ -747,9 +744,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     });
 
     if (actualGain > 0) {
-      showPointAnnouncement(`+${actualGain} pts`, actualGain);
+      showPointAnnouncement(mainTaskBonusDelta > 0 ? `+${actualGain} pts including main task bonus` : `+${actualGain} pts`, actualGain);
     } else if (actualGain < 0) {
-      showPointAnnouncement(`${actualGain} pts canceled`, actualGain);
+      showPointAnnouncement(mainTaskBonusDelta < 0 ? `${actualGain} pts, main task bonus removed` : `${actualGain} pts canceled`, actualGain);
     } else if (pointsGained > 0) {
       showPointAnnouncement('Daily cap reached', 0);
     }
