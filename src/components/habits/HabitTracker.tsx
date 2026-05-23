@@ -1163,6 +1163,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                 onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                 onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
                                 onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
+                                onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => toggleSubTask(record.id, targetTaskId, subId, current)}
                                 onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
                                 onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
                                 isEditing={editingTaskId === task.id} 
@@ -1281,6 +1282,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                       onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                       onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
                                       onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
+                                      onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => toggleSubTask(record.id, targetTaskId, subId, current)}
                                       onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
                                       onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
                                       isEditing={editingTaskId === task.id} 
@@ -1652,6 +1654,7 @@ function SortableMasterItem(props: any) {
     onToggle, 
     onToggleTask,
     onToggleSubTask, 
+    onToggleSubTaskForTask,
     onAdjustCounter,
     recordData, 
     isPeek, 
@@ -1770,6 +1773,7 @@ function SortableMasterItem(props: any) {
                     task={child}
                     completed={!!recordData?.[child.id]}
                     onToggle={() => onToggleTask?.(child.id)}
+                    onToggleSubTask={(subId: string, current: boolean) => onToggleSubTaskForTask?.(child.id, subId, current)}
                   />
                 ))}
               </SortableContext>
