@@ -1500,10 +1500,29 @@ function SortableMasterItem(props: any) {
     return false;
   });
 
+  // Sync expanded state across all days in the week view
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.taskId === task.id) {
+        setIsExpanded(customEvent.detail.isExpanded);
+      }
+    };
+    window.addEventListener('toggle-list-expanded-changed', handleSync);
+    return () => {
+      window.removeEventListener('toggle-list-expanded-changed', handleSync);
+    };
+  }, [task.id]);
+
   const toggleExpanded = () => {
     const nextState = !isExpanded;
     setIsExpanded(nextState);
     localStorage.setItem(`subtasks_expanded_${task.id}`, String(nextState));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('toggle-list-expanded-changed', {
+        detail: { taskId: task.id, isExpanded: nextState }
+      }));
+    }
   };
 
   const inputRef = useRef<HTMLInputElement>(null);
