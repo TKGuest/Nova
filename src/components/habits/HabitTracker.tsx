@@ -746,7 +746,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     });
 
     if (actualGain > 0) {
-      showPointAnnouncement(mainTaskBonusDelta > 0 ? `+${actualGain} pts including main task bonus` : `+${actualGain} pts`, actualGain);
+      showPointAnnouncement(
+        mainTaskBonusDelta > 0
+          ? `+${actualGain} pts (+${mainTaskBonusDelta} bonus)`
+          : `+${actualGain} pts`,
+        actualGain
+      );
     } else if (actualGain < 0) {
       showPointAnnouncement(mainTaskBonusDelta < 0 ? `${actualGain} pts, main task bonus removed` : `${actualGain} pts canceled`, actualGain);
     } else if (pointsGained > 0) {
@@ -1712,6 +1717,7 @@ function SortableMasterItem(props: any) {
   if (task.type === 'toggle_list') {
     const children = (allTasks || []).filter((t: any) => t.parentId === task.id && t.type === 'habit');
     const recordId = id.split('::')[0];
+    const completedChildren = children.filter((child: any) => !!recordData?.[child.id]).length;
 
     // Scale the toggle header label proportionally with the user's text size setting
     const labelSizeClass = textSizeClass.includes('text-[18px]')
@@ -1755,6 +1761,9 @@ function SortableMasterItem(props: any) {
               {task.name}
             </span>
           )}
+          <span className="text-[9px] font-black tracking-wider shrink-0" style={{ color: labelColor }}>
+            {completedChildren}/{children.length}
+          </span>
         </button>
 
         {isExpanded && children.length > 0 && (
