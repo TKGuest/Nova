@@ -1803,14 +1803,7 @@ function SortableMasterItem(props: any) {
             <GripVertical size={10} className="text-gray-800" />
           </div>
         )}
-        {isEditing ? (
-          <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
-        ) : (
-          <span className={`flex-1 min-w-0 font-medium text-gray-400 ${textTruncateMode === 'truncate' ? 'truncate whitespace-nowrap overflow-hidden' : 'whitespace-normal break-words'} ${textSizeClass}`}>
-            {task.name}
-          </span>
-        )}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 order-1">
           {isPeek && (
             <button onClick={() => onAdjustCounter?.(-1)} disabled={currentCount <= 0} className="w-6 h-6 rounded bg-[#111] border border-[#2d2d2d] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all">
               <Minus size={12} />
@@ -1825,6 +1818,13 @@ function SortableMasterItem(props: any) {
             </button>
           )}
         </div>
+        {isEditing ? (
+          <input ref={inputRef} className={`order-2 flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
+        ) : (
+          <span className={`order-2 flex-1 min-w-0 font-medium text-gray-400 ${textTruncateMode === 'truncate' ? 'truncate whitespace-nowrap overflow-hidden' : 'whitespace-normal break-words'} ${textSizeClass}`}>
+            {task.name}
+          </span>
+        )}
       </div>
     );
   }
