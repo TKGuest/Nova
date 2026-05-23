@@ -619,16 +619,18 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       const wasAllComplete = prevCompletedCount === totalSubs;
       const isAllComplete = nextCompletedCount === totalSubs;
       
-      if (task.rewardMode !== 'subtasks_separately') {
-        if (isAllComplete && !wasAllComplete) {
-          const bonusBase = task.bonusPoints ?? 5;
-          mainTaskBonusDelta = Math.round(bonusBase * multiplier);
-          pointsGained += mainTaskBonusDelta;
-        } else if (!isAllComplete && wasAllComplete) {
-          const bonusBase = task.bonusPoints ?? 5;
-          mainTaskBonusDelta = -Math.round(bonusBase * multiplier);
-          pointsGained += mainTaskBonusDelta;
-        }
+      if (isAllComplete && !wasAllComplete) {
+        const bonusBase = task.rewardMode === 'subtasks_separately'
+          ? (task.pointsValue ?? 10)
+          : (task.bonusPoints ?? task.pointsValue ?? 5);
+        mainTaskBonusDelta = Math.round(bonusBase * multiplier);
+        pointsGained += mainTaskBonusDelta;
+      } else if (!isAllComplete && wasAllComplete) {
+        const bonusBase = task.rewardMode === 'subtasks_separately'
+          ? (task.pointsValue ?? 10)
+          : (task.bonusPoints ?? task.pointsValue ?? 5);
+        mainTaskBonusDelta = -Math.round(bonusBase * multiplier);
+        pointsGained += mainTaskBonusDelta;
       }
       
       // C. Auto-Tick Main Task
