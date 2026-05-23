@@ -1126,6 +1126,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                 isPeek={true}
                                 streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                 onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
+                                onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
                                 onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
                                 onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
                                 onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
@@ -1243,6 +1244,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                       isPeek={false}
                                       streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                       onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
+                                      onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
                                       onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
                                       onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
                                       onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
@@ -1610,6 +1612,7 @@ function SortableMasterItem(props: any) {
     allTasks,
     completed, 
     onToggle, 
+    onToggleTask,
     onToggleSubTask, 
     onAdjustCounter,
     recordData, 
@@ -1729,6 +1732,7 @@ function SortableMasterItem(props: any) {
                     id={`${recordId}::${child.id}`}
                     task={child}
                     completed={!!recordData?.[child.id]}
+                    onToggle={() => onToggleTask?.(child.id)}
                   />
                 ))}
               </SortableContext>
@@ -1761,7 +1765,6 @@ function SortableMasterItem(props: any) {
             <GripVertical size={10} className="text-gray-800" />
           </div>
         )}
-        <Hash size={13} className="text-purple-500 shrink-0" />
         {isEditing ? (
           <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
         ) : (
@@ -1770,15 +1773,19 @@ function SortableMasterItem(props: any) {
           </span>
         )}
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => onAdjustCounter?.(-1)} disabled={currentCount <= 0} className="w-6 h-6 rounded bg-[#111] border border-[#2d2d2d] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all">
-            <Minus size={12} />
-          </button>
+          {isPeek && (
+            <button onClick={() => onAdjustCounter?.(-1)} disabled={currentCount <= 0} className="w-6 h-6 rounded bg-[#111] border border-[#2d2d2d] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all">
+              <Minus size={12} />
+            </button>
+          )}
           <span className="min-w-10 text-center text-[12px] font-black text-purple-300">
             {currentCount}{limit > 0 ? `/${limit}` : ''}
           </span>
-          <button onClick={() => onAdjustCounter?.(1)} disabled={limit > 0 && currentCount >= limit} className="w-6 h-6 rounded bg-[#111] border border-[#2d2d2d] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all">
-            <Plus size={12} />
-          </button>
+          {isPeek && (
+            <button onClick={() => onAdjustCounter?.(1)} disabled={limit > 0 && currentCount >= limit} className="w-6 h-6 rounded bg-[#111] border border-[#2d2d2d] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all">
+              <Plus size={12} />
+            </button>
+          )}
         </div>
       </div>
     );
