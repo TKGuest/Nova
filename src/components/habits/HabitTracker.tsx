@@ -609,8 +609,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       pointsGained += isCompleted ? subTaskPointsChange : -subTaskPointsChange;
     }
     
-    // B. 100% Sub-tasks Completed Bonus
-    if (task.subTasks && task.subTasks.length > 0 && task.rewardMode !== 'subtasks_separately') {
+    // B. 100% Sub-tasks Completed Bonus and auto-complete checks
+    if (task.subTasks && task.subTasks.length > 0) {
       const totalSubs = task.subTasks.length;
       const prevCompletedCount = task.subTasks.filter(s => !!recordData[`${taskId}_${s.id}`]).length;
       const nextCompletedCount = task.subTasks.filter(s => !!nextRecordData[`${taskId}_${s.id}`]).length;
@@ -618,12 +618,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       const wasAllComplete = prevCompletedCount === totalSubs;
       const isAllComplete = nextCompletedCount === totalSubs;
       
-      if (isAllComplete && !wasAllComplete) {
-        const bonusBase = task.bonusPoints ?? 5;
-        pointsGained += Math.round(bonusBase * multiplier);
-      } else if (!isAllComplete && wasAllComplete) {
-        const bonusBase = task.bonusPoints ?? 5;
-        pointsGained -= Math.round(bonusBase * multiplier);
+      if (task.rewardMode !== 'subtasks_separately') {
+        if (isAllComplete && !wasAllComplete) {
+          const bonusBase = task.bonusPoints ?? 5;
+          pointsGained += Math.round(bonusBase * multiplier);
+        } else if (!isAllComplete && wasAllComplete) {
+          const bonusBase = task.bonusPoints ?? 5;
+          pointsGained -= Math.round(bonusBase * multiplier);
+        }
       }
       
       // C. Auto-Tick Main Task
