@@ -2050,8 +2050,32 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
           <div className="space-y-1.5 border-t border-[#2d2d2d]/50 pt-3">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Sub-Tasks List</span>
             <div className="space-y-1.5 mt-1 max-h-40 overflow-y-auto custom-scrollbar">
-              {(task.subTasks || []).map((sub: any) => (
+              {(task.subTasks || []).map((sub: any, index: number) => (
                 <div key={sub.id} className="flex items-center gap-3 px-3 py-2 bg-[#111] rounded border border-[#2d2d2d] hover:border-[#333] transition-colors">
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <button
+                      onClick={() => {
+                        if (index === 0) return;
+                        onUpdate(task.id, { subTasks: arrayMove(task.subTasks || [], index, index - 1) });
+                      }}
+                      disabled={index === 0}
+                      className="p-0.5 text-gray-500 hover:text-blue-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                      title="Move sub-task up"
+                    >
+                      <ChevronDown size={12} className="rotate-180" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (index === (task.subTasks || []).length - 1) return;
+                        onUpdate(task.id, { subTasks: arrayMove(task.subTasks || [], index, index + 1) });
+                      }}
+                      disabled={index === (task.subTasks || []).length - 1}
+                      className="p-0.5 text-gray-500 hover:text-blue-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                      title="Move sub-task down"
+                    >
+                      <ChevronDown size={12} />
+                    </button>
+                  </div>
                   <input 
                     type="text"
                     className="text-[12.5px] font-medium text-gray-200 flex-1 bg-transparent border-none outline-none focus:border-b focus:border-purple-500/50 transition-colors"
