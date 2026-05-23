@@ -1563,7 +1563,7 @@ function SortableMasterItem(props: any) {
           <div className="relative mt-0.5 space-y-0.5">
             {/* Absolute Bolder Vertical Line */}
             <div 
-              className="absolute left-[9px] top-0 bottom-0 w-[2px] pointer-events-none rounded"
+              className="absolute left-[4px] top-0 bottom-0 w-[2px] pointer-events-none rounded"
               style={{ backgroundColor: labelColor }}
             />
             <div className="pl-0">
@@ -1586,7 +1586,7 @@ function SortableMasterItem(props: any) {
           <div className="relative py-1 text-[10px] text-gray-700 italic pl-6">
             {/* Absolute Bolder Vertical Line */}
             <div 
-              className="absolute left-[9px] top-0 bottom-0 w-[2px] pointer-events-none rounded"
+              className="absolute left-[4px] top-0 bottom-0 w-[2px] pointer-events-none rounded"
               style={{ backgroundColor: labelColor }}
             />
             Empty group
