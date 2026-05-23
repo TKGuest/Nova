@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc, addDoc } from 'firebase/firestore';
-import { Plus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Clock, Edit2 } from 'lucide-react';
+import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Clock, Edit2 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -18,7 +18,7 @@ import { LexoRank } from 'lexorank';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { GamificationDashboard } from './GamificationDashboard';
 
-type PropertyType = 'habit' | 'counter' | 'notes' | 'toggle_list';
+type PropertyType = 'habit' | 'counter' | 'notes' | 'toggle_list' | 'task_counter';
 type TextSize = 'small' | 'medium' | 'large';
 
 interface MasterTask {
@@ -39,12 +39,16 @@ interface MasterTask {
   // Toggle List styling
   labelColor?: string;
   labelBold?: boolean;
+  // Task Counter
+  counterPoints?: number;       // Points per increment (can be negative)
+  counterLimit?: number;        // Max daily completions (0 = unlimited)
+  counterBonusPoints?: number;  // Bonus for first increment each day
 }
 
 interface PageRecord {
   id: string;
   date: string;
-  data: Record<string, boolean>;
+  data: Record<string, boolean | number>;
   notes?: string;
   allHabitsBonusAwarded?: boolean;
   coverImage?: {
@@ -86,6 +90,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [newItemModal, setNewItemModal] = useState(false);
   const { showToast, confirm: customConfirm } = useNotification();
 
+  // Custom point announcement toasts
+  const [announcements, setAnnouncements] = useState<{ id: number; text: string; delta: number }[]>([]);
+  const showPointAnnouncement = (text: string, delta: number) => {
+    const id = Date.now();
+    setAnnouncements(prev => [...prev, { id, text, delta }]);
+    setTimeout(() => setAnnouncements(prev => prev.filter(a => a.id !== id)), 2800);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -276,7 +287,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               return;
             }
 
-            updates.points = stats.points - (diffDays * 5); // 5 points decay per day
+            const decayValue = stats.decayValue ?? 5;
+            updates.points = stats.points - (diffDays * decayValue);
             updates.lastDecayDate = dateStr;
             
             if (updates.points < 0) updates.debt = true;
@@ -388,6 +400,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (type === 'notes') defaultName = 'Quick Notes';
     else if (type === 'counter') defaultName = 'Progress Counter';
     else if (type === 'toggle_list') defaultName = 'New Group';
+    else if (type === 'task_counter') defaultName = 'New Task Counter';
 
     await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', id), { id, name: defaultName, sortOrder, type });
   };
@@ -414,7 +427,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   const evaluateAllHabitsBonus = (
     recordId: string,
-    recordData: Record<string, boolean>,
+    recordData: Record<string, boolean | number>,
     currentPoints: number,
     stats: any,
     todayStr: string
@@ -500,7 +513,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         
         // Base points: either custom defined on task, or default 10.
         const basePoints = task?.pointsValue || 10; 
-        const multiplier = newMultiplier || 1.0;
+        const multiplier = stats.streakMultiplierActive !== false ? (newMultiplier || 1.0) : 1.0;
         const pointsChange = Math.round(basePoints * multiplier);
         
         let newPoints = stats.points;
@@ -510,7 +523,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           pointsEarnedToday = 0; // Reset cap for new day
         }
         
-        const DAILY_CAP = 200; // Inflation control cap
+        const DAILY_CAP = stats.dailyPointCap ?? 200;
         let actualGain = pointsChange;
         
         if (isCompleted) {
@@ -539,6 +552,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           debt: finalPoints < 0,
           taskStreaks
         });
+
+        if (isCompleted) {
+          showPointAnnouncement(actualGain > 0 ? `+${actualGain} pts` : 'Daily cap reached', actualGain);
+        } else {
+          showPointAnnouncement(`-${pointsChange} pts canceled`, -pointsChange);
+        }
       }
     } catch (err) {
       console.warn("Gamification error:", err);
@@ -571,7 +590,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     
     const taskStreaks = stats.taskStreaks || {};
     const currentTaskStreak = taskStreaks[taskId] || { streak: 0, multiplier: 1.0, lastCompletedDate: '' };
-    const multiplier = currentTaskStreak.multiplier || 1.0;
+    const multiplier = stats.streakMultiplierActive !== false ? (currentTaskStreak.multiplier || 1.0) : 1.0;
     
     let pointsGained = 0;
     
@@ -691,7 +710,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (stats.lastPointGainDate !== todayStr) {
       pointsEarnedToday = 0;
     }
-    const DAILY_CAP = 200;
+    const DAILY_CAP = stats.dailyPointCap ?? 200;
     let actualGain = pointsGained;
     if (pointsGained > 0) {
       if (pointsEarnedToday + pointsGained > DAILY_CAP) {
@@ -717,6 +736,61 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       debt: finalPoints < 0,
       taskStreaks
     });
+
+    if (actualGain > 0) {
+      showPointAnnouncement(`+${actualGain} pts`, actualGain);
+    } else if (actualGain < 0) {
+      showPointAnnouncement(`${actualGain} pts canceled`, actualGain);
+    } else if (pointsGained > 0) {
+      showPointAnnouncement('Daily cap reached', 0);
+    }
+  };
+
+  const adjustTaskCounter = async (recordId: string, taskId: string, delta: number) => {
+    if (!user) return;
+    const task = masterTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const recordRef = doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId);
+    const recordSnap = await getDoc(recordRef);
+    if (!recordSnap.exists()) return;
+    const record = recordSnap.data();
+    const recordData = record?.data || {};
+    const currentCount = typeof recordData[taskId] === 'number' ? (recordData[taskId] as number) : 0;
+    const limit = task.counterLimit || 0;
+    if (delta > 0 && limit > 0 && currentCount >= limit) {
+      showPointAnnouncement('Daily limit reached!', 0);
+      return;
+    }
+    const nextCount = Math.max(0, currentCount + delta);
+    const nextRecordData = { ...recordData, [taskId]: nextCount };
+    await updateDoc(recordRef, { data: nextRecordData });
+    const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+    const statsSnap = await getDoc(statsRef);
+    if (!statsSnap.exists()) return;
+    const stats = statsSnap.data() as any;
+    const pointsPerCount = task.counterPoints ?? 5;
+    const bonus = task.counterBonusPoints ?? 0;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const isFirstToday = currentCount === 0 && delta > 0;
+    let earned = pointsPerCount * delta;
+    if (isFirstToday && bonus !== 0) earned += bonus;
+    const DAILY_CAP = stats.dailyPointCap ?? 200;
+    let pointsEarnedToday = stats.lastPointGainDate === todayStr ? (stats.pointsEarnedToday || 0) : 0;
+    let actualEarned = earned;
+    if (earned > 0 && pointsEarnedToday + earned > DAILY_CAP) {
+      actualEarned = Math.max(0, DAILY_CAP - pointsEarnedToday);
+    }
+    const newPoints = stats.points + actualEarned;
+    pointsEarnedToday = Math.max(0, pointsEarnedToday + actualEarned);
+    await updateDoc(statsRef, { points: newPoints, pointsEarnedToday, lastPointGainDate: todayStr, debt: newPoints < 0 });
+    if (actualEarned === 0 && delta > 0) {
+      showPointAnnouncement('Daily cap reached', 0);
+    } else if (actualEarned > 0) {
+      const bonusPart = isFirstToday && bonus > 0 ? ` (+${bonus} bonus)` : '';
+      showPointAnnouncement(`+${actualEarned} pts${bonusPart}`, actualEarned);
+    } else if (actualEarned < 0) {
+      showPointAnnouncement(`${actualEarned} pts`, actualEarned);
+    }
   };
 
   const handleDragEnd = async (event: any) => {
@@ -911,7 +985,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 <Settings size={14}/> Settings
               </button>
               {isSettingsOpen && (
-                <div onClick={(e) => e.stopPropagation()} className="absolute top-full right-0 mt-2 z-[100] w-64 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg shadow-2xl p-4 space-y-6 text-left">
+                <div onClick={(e) => e.stopPropagation()} className="fixed inset-4 md:inset-12 z-[100] bg-[#141414] border border-[#2d2d2d] rounded-xl shadow-2xl p-5 md:p-8 text-left overflow-y-auto custom-scrollbar max-w-4xl mx-auto">
+                  <div className="flex items-start justify-between gap-4 mb-6 pb-4 border-b border-[#2d2d2d]">
+                    <div>
+                      <h2 className="text-lg font-black text-white tracking-tight">Settings</h2>
+                      <p className="text-[11px] text-gray-500 mt-1">Dashboard tools, display preferences, and gamification rules.</p>
+                    </div>
+                    <button onClick={() => setIsSettingsOpen(false)} className="p-2 text-gray-500 hover:text-white hover:bg-[#222] rounded transition-all"><X size={18} /></button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Dashboard Tools</span>
                     <button onClick={() => { setIsPropertyModalOpen(true); setIsSettingsOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#2d2d2d] text-gray-400 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer"><Settings2 size={16}/> Manage Properties</button>
@@ -960,6 +1042,35 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <span className="text-[9px] text-gray-600 leading-normal block">Earned when all daily main habits are successfully completed.</span>
                     </div>
                   </div>
+                  <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3 md:col-span-2">
+                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Gamification Rules</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <SettingsNumberInput label="Point Decay" description="Points lost per missed day." value={gamificationStats?.decayValue ?? 5} onCommit={async (value) => {
+                        if (!user) return;
+                        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { decayValue: value });
+                      }} />
+                      <SettingsNumberInput label="Daily Point Cap" description="Maximum positive points per day." value={gamificationStats?.dailyPointCap ?? 200} onCommit={async (value) => {
+                        if (!user) return;
+                        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { dailyPointCap: value });
+                      }} />
+                      <div className="bg-[#111] border border-[#2d2d2d] rounded-lg p-3 flex flex-col justify-between gap-3">
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Streak Multiplier</span>
+                          <span className="text-[9px] text-gray-600 leading-normal block mt-1">Apply streak multiplier to point gains.</span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!user) return;
+                            await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakMultiplierActive: gamificationStats?.streakMultiplierActive === false });
+                          }}
+                          className={`px-3 py-2 rounded text-[10px] font-black uppercase tracking-widest transition-all ${gamificationStats?.streakMultiplierActive === false ? 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-500' : 'bg-green-500/15 border border-green-500/30 text-green-400'}`}
+                        >
+                          {gamificationStats?.streakMultiplierActive === false ? 'Off' : 'On'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1004,7 +1115,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <h3 className={`font-black uppercase text-gray-700 tracking-widest mb-4 px-1 ${getSectionTitleClasses()}`}>Daily Habits</h3>
                       <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-0.5">
-                          {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list')).map(task => (
+                          {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter')).map(task => (
                               <SortableMasterItem 
                                 key={task.id} 
                                 id={`${record.id}::${task.id}`} 
@@ -1016,6 +1127,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                 streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                 onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                 onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
+                                onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
                                 onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
                                 isEditing={editingTaskId === task.id} 
                                 onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
@@ -1120,7 +1232,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             <div className="p-1 flex-1 flex flex-col">
                               <div className="space-y-0 min-h-[40px]">
                                 <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
-                                  {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list')).map(task => (
+                                  {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter')).map(task => (
                                     <SortableMasterItem 
                                       key={task.id} 
                                       id={`${record.id}::${task.id}`} 
@@ -1132,6 +1244,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                       streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                       onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                       onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
+                                      onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
                                       onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
                                       isEditing={editingTaskId === task.id} 
                                       onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
@@ -1210,6 +1323,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                               <div className={getCheckboxScale()}><Checkbox checked={!!record.data?.[task.id]} onClick={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} /></div>
                             ) : task.type === 'counter' ? (
                               <span className={`font-black text-blue-500/80 uppercase ${getTextClasses()}`}>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
+                            ) : task.type === 'task_counter' ? (
+                              <span className={`font-black text-purple-400 uppercase ${getTextClasses()}`}>{typeof record.data?.[task.id] === 'number' ? record.data?.[task.id] : 0}</span>
                             ) : '-'}
                           </td>
                         ))}
@@ -1227,6 +1342,24 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       </div>
 
       <ConfirmDialog isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} onConfirm={() => confirmDelete && deleteRecord(confirmDelete.id)} title="Delete Date Record" message={`Are you sure you want to delete this day? This will permanently remove all logs for ${confirmDelete?.label}.`} />
+      {gamificationStats && user && (
+        <DraggableTestWidget
+          points={gamificationStats.points || 0}
+          onAdjust={async (delta) => {
+            const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+            const nextPoints = (gamificationStats.points || 0) + delta;
+            await updateDoc(statsRef, { points: nextPoints, debt: nextPoints < 0 });
+            showPointAnnouncement(delta > 0 ? `+${delta} test pts` : `${delta} test pts`, delta);
+          }}
+        />
+      )}
+      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+        {announcements.map(a => (
+          <div key={a.id} className={`px-4 py-3 rounded-lg border shadow-2xl text-[12px] font-black uppercase tracking-wider animate-fade-in ${a.delta < 0 ? 'bg-red-500/15 border-red-500/30 text-red-300' : a.delta > 0 ? 'bg-green-500/15 border-green-500/30 text-green-300' : 'bg-[#1a1a1a] border-[#2d2d2d] text-gray-300'}`}>
+            {a.text}
+          </div>
+        ))}
+      </div>
       <DatePickerModal isOpen={!!isDatePickerOpen} onClose={() => setIsDatePickerOpen(null)} initialDate={isDatePickerOpen?.initialDate} onSelect={async (date: Date) => { 
         if (!user) return; 
         const dateStr = format(date, 'yyyy-MM-dd'); 
@@ -1256,6 +1389,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             <button onClick={() => addMasterTask('counter')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><Activity size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Counter</span></button>
             <button onClick={() => addMasterTask('notes')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><StickyNote size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Notes</span></button>
             <button onClick={() => addMasterTask('toggle_list')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><ChevronDown size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Toggle List</span></button>
+            <button onClick={() => addMasterTask('task_counter')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all"><Hash size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Task Counter</span></button>
           </div>
           <div className="space-y-2">
             <DndContext
@@ -1477,6 +1611,7 @@ function SortableMasterItem(props: any) {
     completed, 
     onToggle, 
     onToggleSubTask, 
+    onAdjustCounter,
     recordData, 
     isPeek, 
     streak = 0, 
@@ -1615,6 +1750,40 @@ function SortableMasterItem(props: any) {
     );
   }
 
+  if (task.type === 'task_counter') {
+    const currentCount = typeof recordData?.[task.id] === 'number' ? recordData[task.id] : 0;
+    const limit = task.counterLimit || 0;
+
+    return (
+      <div ref={isPeek ? setNodeRef : null} style={style} onContextMenu={onContextMenu} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-[#252526] transition-all min-h-[28px] group/item">
+        {isPeek && (
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+            <GripVertical size={10} className="text-gray-800" />
+          </div>
+        )}
+        <Hash size={13} className="text-purple-500 shrink-0" />
+        {isEditing ? (
+          <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
+        ) : (
+          <span className={`flex-1 min-w-0 font-medium text-gray-400 ${textTruncateMode === 'truncate' ? 'truncate whitespace-nowrap overflow-hidden' : 'whitespace-normal break-words'} ${textSizeClass}`}>
+            {task.name}
+          </span>
+        )}
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => onAdjustCounter?.(-1)} disabled={currentCount <= 0} className="w-6 h-6 rounded bg-[#111] border border-[#2d2d2d] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all">
+            <Minus size={12} />
+          </button>
+          <span className="min-w-10 text-center text-[12px] font-black text-purple-300">
+            {currentCount}{limit > 0 ? `/${limit}` : ''}
+          </span>
+          <button onClick={() => onAdjustCounter?.(1)} disabled={limit > 0 && currentCount >= limit} className="w-6 h-6 rounded bg-[#111] border border-[#2d2d2d] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all">
+            <Plus size={12} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (task.type !== 'habit') return null;
   
   const hasSubtasks = task.subTasks && task.subTasks.length > 0;
@@ -1693,7 +1862,7 @@ function SortableMasterItem(props: any) {
 function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { task: MasterTask; allTasks: MasterTask[]; onDelete: (id: string) => void; onRename: (id: string, name: string) => void; onUpdate?: (id: string, updates: any) => void; }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
-  const Icon = task.type === 'notes' ? StickyNote : task.type === 'counter' ? Activity : task.type === 'toggle_list' ? ChevronDown : Check;
+  const Icon = task.type === 'notes' ? StickyNote : task.type === 'counter' ? Activity : task.type === 'toggle_list' ? ChevronDown : task.type === 'task_counter' ? Hash : Check;
   const [expanded, setExpanded] = useState(false);
   const [newSubTask, setNewSubTask] = useState('');
 
@@ -1901,8 +2070,95 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
           </div>
             </>
           )}
+          {task.type === 'task_counter' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Points Per Increment</span>
+                <input
+                  type="number"
+                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                  defaultValue={task.counterPoints ?? 5}
+                  onBlur={(e) => onUpdate(task.id, { counterPoints: parseInt(e.target.value) || 0 })}
+                  onWheel={(e) => e.currentTarget.blur()}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">First Increment Bonus</span>
+                <input
+                  type="number"
+                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                  defaultValue={task.counterBonusPoints ?? 0}
+                  onBlur={(e) => onUpdate(task.id, { counterBonusPoints: parseInt(e.target.value) || 0 })}
+                  onWheel={(e) => e.currentTarget.blur()}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Daily Max Limit</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                  defaultValue={task.counterLimit ?? 0}
+                  onBlur={(e) => onUpdate(task.id, { counterLimit: Math.max(0, parseInt(e.target.value) || 0) })}
+                  onWheel={(e) => e.currentTarget.blur()}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SettingsNumberInput({ label, description, value, onCommit }: { label: string; description: string; value: number; onCommit: (value: number) => void | Promise<void> }) {
+  return (
+    <div className="bg-[#111] border border-[#2d2d2d] rounded-lg p-3">
+      <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">{label}</span>
+      <input
+        type="number"
+        className="mt-2 w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded px-3 py-2 text-sm font-bold text-white outline-none focus:border-purple-500"
+        defaultValue={value}
+        onBlur={(e) => onCommit(parseInt(e.target.value) || 0)}
+        onWheel={(e) => e.currentTarget.blur()}
+      />
+      <span className="text-[9px] text-gray-600 leading-normal block mt-2">{description}</span>
+    </div>
+  );
+}
+
+function DraggableTestWidget({ points, onAdjust }: { points: number; onAdjust: (delta: number) => void | Promise<void> }) {
+  const [position, setPosition] = useState({ x: 24, y: 120 });
+  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = { startX: e.clientX, startY: e.clientY, originX: position.x, originY: position.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const nextX = Math.max(8, dragRef.current.originX + e.clientX - dragRef.current.startX);
+    const nextY = Math.max(8, dragRef.current.originY + e.clientY - dragRef.current.startY);
+    setPosition({ x: nextX, y: nextY });
+  };
+
+  return (
+    <div className="fixed z-[9998] w-[190px] bg-[#151515] border border-purple-500/30 rounded-xl shadow-2xl overflow-hidden" style={{ left: position.x, top: position.y }}>
+      <div onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => { dragRef.current = null; }} className="cursor-grab active:cursor-grabbing px-3 py-2 bg-purple-500/10 border-b border-purple-500/20 flex items-center justify-between">
+        <span className="text-[10px] font-black uppercase tracking-widest text-purple-300">Test Points</span>
+        <GripVertical size={14} className="text-purple-400" />
+      </div>
+      <div className="p-3 space-y-3">
+        <div className="text-2xl font-black text-white">{points.toLocaleString()}</div>
+        <div className="grid grid-cols-2 gap-2">
+          {[-100, -10, 10, 100].map(delta => (
+            <button key={delta} onClick={() => onAdjust(delta)} className={`px-2 py-2 rounded text-[11px] font-black transition-all ${delta > 0 ? 'bg-green-500/15 text-green-300 hover:bg-green-500/25' : 'bg-red-500/15 text-red-300 hover:bg-red-500/25'}`}>
+              {delta > 0 ? `+${delta}` : delta}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

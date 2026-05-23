@@ -69,6 +69,10 @@ export interface HabitStats {
   equippedBuffs: EquippedBuff[];
   taskStreaks?: Record<string, { streak: number, multiplier: number, lastCompletedDate?: string }>;
   allHabitsBonus?: number;
+  // Customizable gamification settings
+  decayValue?: number;           // Points lost per missed day (default 5)
+  streakMultiplierActive?: boolean; // Whether streak multiplier applies (default true)
+  dailyPointCap?: number;        // Max points earnable per day (default 200)
 }
 
 export interface InventoryItem {
