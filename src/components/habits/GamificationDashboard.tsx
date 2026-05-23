@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { HabitStats, InventoryItem } from '@/types';
-import { Shield, Clock, Timer, Play, ShoppingBag, Sparkles } from 'lucide-react';
+import { Shield, Timer, Play, ShoppingBag, Sparkles, Package, Receipt } from 'lucide-react';
 import { useNotification } from '@/context/NotificationContext';
+import { format } from 'date-fns';
 
 export function GamificationDashboard({ 
   pageId, 
@@ -19,6 +20,7 @@ export function GamificationDashboard({
   const { showToast } = useNotification();
   const [stats, setStats] = useState<HabitStats | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [spentToday, setSpentToday] = useState<{ id: string; name: string; cost: number; type: string; purchasedAt: string }[]>([]);
   const [activeTimer, setActiveTimer] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
 
@@ -57,9 +59,16 @@ export function GamificationDashboard({
       }
     });
 
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const spendingRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', `spending_${todayStr}`);
+    const unsubSpending = onSnapshot(spendingRef, (docSnap) => {
+      setSpentToday(docSnap.exists() ? (docSnap.data().items || []) : []);
+    });
+
     return () => {
       unsubStats();
       unsubInv();
+      unsubSpending();
     };
   }, [user, pageId]);
 
@@ -84,6 +93,13 @@ export function GamificationDashboard({
     const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
   }, [activeTimer]);
+
+  const isSpecialItem = (item: InventoryItem) => {
+    const name = item.name.toLowerCase();
+    return name.includes('streak insurance') || name.includes('holiday pass');
+  };
+
+  const spentTotal = useMemo(() => spentToday.reduce((sum, item) => sum + (item.cost || 0), 0), [spentToday]);
 
   if (!stats) return <div className="text-gray-500 p-4 animate-pulse">Loading gamification engine...</div>;
 
@@ -176,6 +192,52 @@ export function GamificationDashboard({
     showToast(`${item.name} active until day end!`, 'success');
   };
 
+  const handleUseInstant = async (item: InventoryItem) => {
+    if (!user) return;
+    const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
+    const newItems = inventory.map(i => {
+      if (i.id === item.id) return { ...i, quantity: i.quantity - 1 };
+      return i;
+    }).filter(i => i.quantity > 0);
+    await updateDoc(invRef, { items: newItems });
+    showToast(`${item.name} used.`, 'success');
+  };
+
+  const handleActivateHolidayPass = async (item: InventoryItem) => {
+    if (!user || !stats) return;
+    const now = new Date();
+    const activeBuffs = stats.equippedBuffs || [];
+    const alreadyActive = activeBuffs.some(b => b.name.toLowerCase().includes('holiday pass') && new Date(b.expiresAt) > now);
+    if (alreadyActive) {
+      showToast('Holiday Pass is already active today!', 'error');
+      return;
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setHours(23, 59, 59, 999);
+
+    const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
+    const newItems = inventory.map(i => {
+      if (i.id === item.id) return { ...i, quantity: i.quantity - 1 };
+      return i;
+    }).filter(i => i.quantity > 0);
+    await updateDoc(invRef, { items: newItems });
+
+    const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+    await updateDoc(statsRef, {
+      equippedBuffs: [
+        ...activeBuffs.filter(b => new Date(b.expiresAt) > now),
+        {
+          id: item.id,
+          name: item.name,
+          activatedAt: now.toISOString(),
+          expiresAt: expiresAt.toISOString()
+        }
+      ]
+    });
+    showToast('Holiday Pass active until day end!', 'success');
+  };
+
   return (
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
       {/* Left Column: Stats */}
@@ -213,7 +275,7 @@ export function GamificationDashboard({
 
         {stats.equippedBuffs && stats.equippedBuffs.filter(b => new Date(b.expiresAt) > new Date()).length > 0 && (
           <div className="mt-4 pt-4 border-t border-[#2d2d2d] text-left">
-            <span className="text-[8px] font-black uppercase text-gray-500 tracking-wider block mb-1.5">Active Buffs (Day End Expiry)</span>
+            <span className="text-[8px] font-black uppercase text-gray-500 tracking-wider block mb-1.5">Active Item Effects</span>
             <div className="flex flex-wrap gap-1.5">
               {stats.equippedBuffs.filter(b => new Date(b.expiresAt) > new Date()).map(b => (
                 <div key={b.id} className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 px-2 py-1.5 rounded-lg text-[9px] font-black text-blue-400 uppercase tracking-wider animate-pulse">
@@ -238,10 +300,11 @@ export function GamificationDashboard({
               {inventory.map(item => (
                 <div key={item.id} className="flex items-center justify-between p-3 bg-[#111] border border-[#222] rounded-lg">
                   <div className="flex items-center gap-3">
-                    {item.type === 'buff' && <Shield size={16} className="text-blue-400" />}
+                    {isSpecialItem(item) && <Package size={16} className="text-amber-400" />}
+                    {item.type === 'buff' && !isSpecialItem(item) && <Shield size={16} className="text-blue-400" />}
                     {item.type === 'timer' && <Timer size={16} className="text-green-400" />}
                     {item.type === 'note' && <Sparkles size={16} className="text-purple-400" />}
-                    {item.type === 'instant' && <Clock size={16} className="text-orange-400" />}
+                    {item.type === 'instant' && <Package size={16} className="text-orange-400" />}
                     <span className="text-sm font-medium text-gray-200">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -251,8 +314,18 @@ export function GamificationDashboard({
                         <Play size={14} />
                       </button>
                     )}
-                    {item.type === 'buff' && (
+                    {item.name.toLowerCase().includes('holiday pass') && (
+                      <button onClick={() => handleActivateHolidayPass(item)} className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-md transition-colors" title="Activate Holiday Pass">
+                        <Play size={14} />
+                      </button>
+                    )}
+                    {item.type === 'buff' && !isSpecialItem(item) && (
                       <button onClick={() => handleActivateBuff(item)} className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-md transition-colors" title="Activate Buff (Day End Expiry)">
+                        <Play size={14} />
+                      </button>
+                    )}
+                    {item.type === 'instant' && (
+                      <button onClick={() => handleUseInstant(item)} className="p-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-md transition-colors" title="Use Item">
                         <Play size={14} />
                       </button>
                     )}
@@ -262,6 +335,35 @@ export function GamificationDashboard({
             </div>
           )}
         </div>
+      </div>
+      <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 md:col-span-2 text-left">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <h2 className="text-[11px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+            <Receipt size={14} /> Spent Today
+          </h2>
+          <span className="text-[11px] font-black text-purple-300">{spentTotal.toLocaleString()} pts</span>
+        </div>
+        {spentToday.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-[#333] rounded-lg text-gray-500 text-sm">
+            No purchases today.
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+            {spentToday.slice().reverse().map(item => (
+              <div key={item.id} className="flex items-center justify-between gap-3 p-3 bg-[#111] border border-[#222] rounded-lg">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Package size={14} className="text-amber-400 shrink-0" />
+                    <span className="text-sm font-bold text-gray-200 truncate">{item.name}</span>
+                    <span className="text-[8px] font-black uppercase tracking-wider text-gray-600 bg-[#1a1a1a] px-1 py-0.2 rounded border border-[#2d2d2d]">{item.type}</span>
+                  </div>
+                  <span className="text-[10px] text-gray-600 block mt-1">{format(new Date(item.purchasedAt), 'h:mm a')}</span>
+                </div>
+                <span className="text-xs font-black text-purple-300 shrink-0">{item.cost} pts</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

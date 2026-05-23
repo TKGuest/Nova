@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc, addDoc } from 'firebase/firestore';
-import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Clock, Edit2 } from 'lucide-react';
+import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Package, Edit2 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -269,7 +269,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       const now = new Date();
       const activeBuffs = (stats.equippedBuffs || []).filter((b: any) => new Date(b.expiresAt) > now);
       const hasHolidayPass = activeBuffs.some((b: any) => b.name.toLowerCase().includes('holiday pass'));
-      const hasStreakInsurance = activeBuffs.some((b: any) => b.name.toLowerCase().includes('streak insurance'));
       
       // Decay points if it's been more than a day
       if (stats.lastDecayDate) {
@@ -295,6 +294,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             
             const taskStreaks = { ...(stats.taskStreaks || {}) };
             let insuranceConsumed = false;
+            let inventoryItems: InventoryItem[] = [];
+            const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
             
             if (diffDays > 1) {
               // Missed multiple days, reset all streaks
@@ -312,11 +313,18 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               const yesterdayRecSnap = await getDoc(yesterdayRecRef);
               const yesterdayData = yesterdayRecSnap.exists() ? (yesterdayRecSnap.data()?.data || {}) : {};
 
+              const invSnap = await getDoc(invRef);
+              inventoryItems = invSnap.exists() ? (invSnap.data().items || []) : [];
+
               Object.keys(taskStreaks).forEach(taskId => {
                 // If not completed yesterday, check Streak Insurance
                 if (!yesterdayData[taskId]) {
-                  if (hasStreakInsurance) {
-                    insuranceConsumed = true; // Streak Insurance protects it!
+                  const insuranceItem = inventoryItems.find((item: InventoryItem) => item.name.toLowerCase().includes('streak insurance') && item.quantity > 0);
+                  if (insuranceItem) {
+                    insuranceConsumed = true; // Streak Insurance protects it automatically.
+                    inventoryItems = inventoryItems.map((item: InventoryItem) => (
+                      item.id === insuranceItem.id ? { ...item, quantity: item.quantity - 1 } : item
+                    )).filter((item: InventoryItem) => item.quantity > 0);
                   } else {
                     taskStreaks[taskId] = {
                       streak: 0,
@@ -330,8 +338,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             updates.taskStreaks = taskStreaks;
 
             if (insuranceConsumed) {
-              // Consume Streak Insurance (remove it from equipped buffs)
-              updates.equippedBuffs = activeBuffs.filter((b: any) => !b.name.toLowerCase().includes('streak insurance'));
+              await updateDoc(invRef, { items: inventoryItems });
             }
           }
         }
@@ -895,7 +902,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         
         let newItems = [...inventory];
         if (existingItem) {
-          newItems = newItems.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1, costPurchased: item.cost, durationHours: item.durationHours || i.durationHours } : i);
+          newItems = newItems.map(i => i.id === item.id ? {
+            ...i,
+            quantity: i.quantity + 1,
+            costPurchased: item.cost,
+            durationHours: item.durationHours || i.durationHours,
+            durationValue: item.durationValue ?? i.durationValue,
+            durationUnit: item.durationUnit ?? i.durationUnit
+          } : i);
         } else {
           newItems.push({
             id: item.id,
@@ -903,11 +917,32 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             type: item.type,
             quantity: 1,
             costPurchased: item.cost,
-            durationHours: item.durationHours || 0
+            durationHours: item.durationHours || 0,
+            durationValue: item.durationValue,
+            durationUnit: item.durationUnit
           });
         }
         
         await updateDoc(invRef, { items: newItems });
+
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const spendingRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', `spending_${todayStr}`);
+        const spendingSnap = await getDoc(spendingRef);
+        const spendingItems = spendingSnap.exists() ? (spendingSnap.data().items || []) : [];
+        await setDoc(spendingRef, {
+          date: todayStr,
+          items: [
+            ...spendingItems,
+            {
+              id: `${item.id}_${Date.now()}`,
+              itemId: item.id,
+              name: item.name,
+              type: item.type,
+              cost: item.cost,
+              purchasedAt: new Date().toISOString()
+            }
+          ]
+        });
         showToast(`${item.name} purchased!`, 'success');
       }
     });
@@ -1478,11 +1513,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               ) : (
                 <div className="space-y-3">
                   {shopItems.map(item => {
+                    const nameLower = item.name.toLowerCase();
+                    const isSpecialItem = nameLower.includes('streak insurance') || nameLower.includes('holiday pass');
                     const icon = 
+                      isSpecialItem ? <Package size={20} className="text-amber-400" /> :
                       item.type === 'buff' ? <Shield size={20} className="text-blue-400" /> :
                       item.type === 'timer' ? <Timer size={20} className="text-green-400" /> :
                       item.type === 'note' ? <Sparkles size={20} className="text-purple-400" /> :
-                      <Clock size={20} className="text-orange-400" />;
+                      <Package size={20} className="text-orange-400" />;
 
                     return (
                       <div key={item.id} className="flex items-center gap-4 p-4 bg-[#111] border border-[#2d2d2d] rounded-xl hover:border-purple-500/30 transition-all group relative">
@@ -1492,7 +1530,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         <div className="flex-1 min-w-0 text-left">
                           <div className="flex items-center gap-1.5">
                             <h3 className="text-sm font-bold text-gray-200 truncate">{item.name}</h3>
-                            <span className="text-[8px] font-black uppercase tracking-wider text-gray-600 bg-[#1a1a1a] px-1 py-0.2 rounded border border-[#2d2d2d]">{item.type}</span>
+                            <span className="text-[8px] font-black uppercase tracking-wider text-gray-600 bg-[#1a1a1a] px-1 py-0.2 rounded border border-[#2d2d2d]">{isSpecialItem ? 'item' : item.type}</span>
                           </div>
                           <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{item.description}</p>
                           {item.durationHours && item.durationHours > 0 ? (
