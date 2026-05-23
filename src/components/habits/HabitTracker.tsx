@@ -1751,7 +1751,6 @@ function SortableMasterItem(props: any) {
               {task.name}
             </span>
           )}
-          <div className="flex-1 h-[1px] ml-1" style={{ backgroundColor: `${labelColor}33` }} />
         </button>
 
         {isExpanded && children.length > 0 && (
