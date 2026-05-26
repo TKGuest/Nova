@@ -1,7 +1,10 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, setDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { TableProperties, Columns, Plus, Trash2, LayoutGrid, Table } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 interface DatabaseBlockProps {
   databaseId: string;
@@ -16,35 +19,23 @@ interface RowData {
 }
 
 export function DatabaseBlock({ databaseId }: DatabaseBlockProps) {
+  const { user } = useAuth();
   const [view, setView] = useState<'table' | 'board'>('table');
   const [rows, setRows] = useState<RowData[]>([]);
 
   useEffect(() => {
-    let isConfigured = false;
-    try {
-      if (db.app.options.apiKey?.length && db.app.options.apiKey !== "YOUR_API_KEY") {
-        isConfigured = true;
-      }
-    } catch {}
+    // Require authenticated user before subscribing
+    if (!user) return;
 
-    if (!isConfigured) {
-      // Mock Data
-      setRows([
-        { id: '1', name: 'Write documentation', status: 'To Do', date: '2026-05-01', done: false },
-        { id: '2', name: 'Fix build', status: 'In Progress', date: '2026-04-30', done: false },
-        { id: '3', name: 'Scaffold App', status: 'Done', date: '2026-04-29', done: true },
-      ]);
-      return;
-    }
-
-    const q = query(collection(db, 'databases', databaseId, 'rows'));
+    const q = query(collection(db, 'users', user.uid, 'databases', databaseId, 'rows'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setRows(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as RowData)));
     });
     return () => unsubscribe();
-  }, [databaseId]);
+  }, [databaseId, user]);
 
   const addRow = async () => {
+    if (!user) return;
     const newRow: RowData = {
       id: Date.now().toString(),
       name: '',
@@ -55,31 +46,42 @@ export function DatabaseBlock({ databaseId }: DatabaseBlockProps) {
 
     setRows([...rows, newRow]);
     try {
-      if (db.app.options.apiKey !== "YOUR_API_KEY") {
-        await setDoc(doc(db, 'databases', databaseId, 'rows', newRow.id), newRow);
-      }
-    } catch {}
+      await setDoc(doc(db, 'users', user.uid, 'databases', databaseId, 'rows', newRow.id), newRow);
+    } catch (e) {
+      console.error('Failed to add row:', e);
+    }
   };
 
   const updateRow = async (id: string, updates: Partial<RowData>) => {
+    if (!user) return;
     setRows(rows.map(r => r.id === id ? { ...r, ...updates } : r));
     try {
-      if (db.app.options.apiKey !== "YOUR_API_KEY") {
-        await updateDoc(doc(db, 'databases', databaseId, 'rows', id), updates);
-      }
-    } catch {}
+      await updateDoc(doc(db, 'users', user.uid, 'databases', databaseId, 'rows', id), updates);
+    } catch (e) {
+      console.error('Failed to update row:', e);
+    }
   };
 
   const deleteRow = async (id: string) => {
+    if (!user) return;
     setRows(rows.filter(r => r.id !== id));
     try {
-      if (db.app.options.apiKey !== "YOUR_API_KEY") {
-        await deleteDoc(doc(db, 'databases', databaseId, 'rows', id));
-      }
-    } catch {}
+      await deleteDoc(doc(db, 'users', user.uid, 'databases', databaseId, 'rows', id));
+    } catch (e) {
+      console.error('Failed to delete row:', e);
+    }
   };
 
   const statuses: RowData['status'][] = ['To Do', 'In Progress', 'Done'];
+
+  // Show placeholder if not authenticated yet
+  if (!user) {
+    return (
+      <div className="w-full my-4 p-4 border border-border rounded-lg bg-[#1e1e1e] text-gray-500 text-sm">
+        Loading database...
+      </div>
+    );
+  }
 
   return (
     <div className="w-full my-4 p-4 border border-border rounded-lg bg-[#1e1e1e]">
@@ -201,16 +203,7 @@ export function DatabaseBlock({ databaseId }: DatabaseBlockProps) {
                   </div>
                 ))}
                 <button 
-                  onClick={() => {
-                    const newRow: RowData = {
-                      id: Date.now().toString(),
-                      name: '',
-                      status: statusGroup,
-                      date: new Date().toISOString().split('T')[0],
-                      done: false
-                    };
-                    setRows([...rows, newRow]);
-                  }}
+                  onClick={addRow}
                   className="flex items-center justify-center gap-1 text-sm text-gray-500 hover:bg-hover rounded mt-1 py-1"
                 >
                   <Plus size={16} /> New
