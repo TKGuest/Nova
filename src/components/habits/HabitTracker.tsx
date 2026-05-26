@@ -1006,7 +1006,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div className={`w-full flex flex-col bg-[#0a0a0a] ${isPeek ? 'flex-1 min-h-0 overflow-hidden py-4 px-6' : 'py-4 px-4 md:px-10'}`}>
+      <div className={`w-full flex flex-col bg-[#0a0a0a] ${isPeek ? 'h-full max-h-full overflow-y-auto py-4 px-6' : 'py-4 px-4 md:px-10'}`}>
         {/* Header - Hidden in focused peek mode to save space */}
         {!(isPeek && sidePeekRecordId) && (
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-[#1a1a1a]">
