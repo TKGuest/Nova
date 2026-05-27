@@ -1,0 +1,14 @@
+# Clean configuration profile 
+model: ollama_chat/qwen2.5-coder:14b
+pretty: true
+stream: true
+map-tokens: 2048
+max-chat-tokens: 8192
+voice-format: "play"
+lint-cmd: "npm run lint --fix"
+voice: "You are connected to live web utilities. When a web page is scraped via the /web command, process the data directly. Never state you do not have internet access or real-time data access when a context block has been added to the conversation."
+
+extra-model-settings:
+  - name: "ollama_chat/qwen2.5vl:7b"
+    extra_body:
+      modalities: ["text", "image"]

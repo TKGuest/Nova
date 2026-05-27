@@ -1,0 +1,13 @@
+{
+  "database": {
+    "rules_path": "database.rules.json"
+  },
+  "storage": {
+    "rules_path": "storage.rules.json"
+  },
+  "auth": {
+    "rules": {
+      "allow read, write": "if request.auth != null"
+    }
+  }
+}
