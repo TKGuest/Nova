@@ -12,8 +12,8 @@ const HabitTracker = () => {
     if (user) {
       const savedStreak = localStorage.getItem(`streak_${user.id}`);
       const savedLastCompletedDate = localStorage.getItem(`lastCompletedDate_${user.id}`);
-      if (savedStreak) setStreak(parseInt(savedStreak, 10));
-      if (savedLastCompletedDate) setLastCompletedDate(new Date(savedLastCompletedDate));
+      if (savedStreak !== null) setStreak(parseInt(savedStreak, 10));
+      if (savedLastCompletedDate !== null) setLastCompletedDate(new Date(savedLastCompletedDate));
     }
   }, [user]);
 
