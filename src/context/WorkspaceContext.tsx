@@ -1,4 +1,4 @@
-// src\context\WorkspaceContext.tsx
+// src/context/WorkspaceContext.tsx
 import React, { createContext, useState } from 'react';
 
 export const WorkspaceContext = createContext();

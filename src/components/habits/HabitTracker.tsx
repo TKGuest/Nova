@@ -1,4 +1,4 @@
-// src\components\habits\HabitTracker.tsx
+// src/components/habits/HabitTracker.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../AuthContext';
 
