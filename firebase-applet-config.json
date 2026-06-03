@@ -1,10 +1,10 @@
 {
-  "projectId": "impactful-crossing-007pf",
-  "appId": "1:825198511924:web:5306115eb8cf1d0c750761",
-  "apiKey": "AIzaSyB9if8JIQwjBziJmOhCY8XYQSzU9LH0Txs",
-  "authDomain": "impactful-crossing-007pf.firebaseapp.com",
+  "projectId": "nova-7258f",
+  "appId": "1:259373588544:web:123227bfd489f2a2eebfa5",
+  "apiKey": "AIzaSyAl0IMkehbCaWy8eWMSqqVMRyAIt8cR5WY",
+  "authDomain": "nova-7258f.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-d544e855-edfa-4341-bdcd-94385927fc0a",
-  "storageBucket": "impactful-crossing-007pf.firebasestorage.app",
-  "messagingSenderId": "825198511924",
+  "storageBucket": "nova-7258f.firebasestorage.app",
+  "messagingSenderId": "259373588544",
   "measurementId": ""
 }

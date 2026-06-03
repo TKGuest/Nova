@@ -3,13 +3,25 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getMessaging, isSupported } from "firebase/messaging";
 import { getStorage } from "firebase/storage";
-import firebaseConfig from "../../firebase-applet-config.json";
+import firebaseConfigJson from "../../firebase-applet-config.json";
+
+// Allow environment variables to override the config (very helpful for custom deployments like Vercel)
+const metaEnv = (import.meta as any).env || {};
+
+const firebaseConfig = {
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || firebaseConfigJson.apiKey,
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJson.authDomain,
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || firebaseConfigJson.projectId,
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJson.storageBucket,
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJson.messagingSenderId,
+  appId: metaEnv.VITE_FIREBASE_APP_ID || firebaseConfigJson.appId,
+  firestoreDatabaseId: metaEnv.VITE_FIREBASE_DATABASE_ID || firebaseConfigJson.firestoreDatabaseId || "(default)"
+};
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
-// CRITICAL: Must use firestoreDatabaseId from firebase-applet-config.json
 const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 const storage = getStorage(app);
 
