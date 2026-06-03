@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Abstract entity representing a user in the system.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        }
+      }
+    },
+    "Page": {
+      "title": "Page",
+      "description": "A notebook page, work board, or habit tracking dashboard.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["note", "habit", "board"]
+        },
+        "createdAt": {
+          "type": "integer"
+        },
+        "isFavorite": {
+          "type": "boolean"
+        },
+        "deletedAt": {
+          "type": "integer"
+        }
+      },
+      "required": ["id", "title"]
+    },
+    "Block": {
+      "title": "Block",
+      "description": "An individual content block inside a text document page.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile or document placeholder."
+    },
+    "/users/{userId}/pages/{pageId}": {
+      "schema": "Page",
+      "description": "User pages consisting of notes or habit dashboards."
+    },
+    "/users/{userId}/pages/{pageId}/blocks/{blockId}": {
+      "schema": "Block",
+      "description": "Content blocks containing editor lines and data."
+    },
+    "/users/{userId}/databases/{databaseId}/rows/{rowId}": {
+      "schema": "object",
+      "description": "Stored inline database rows."
+    },
+    "/users/{userId}/pages/{pageId}/master_tasks/{taskId}": {
+      "schema": "object",
+      "description": "Habit/task configurations."
+    },
+    "/users/{userId}/pages/{pageId}/records/{recordId}": {
+      "schema": "object",
+      "description": "Habit completion records."
+    },
+    "/users/{userId}/pages/{pageId}/shop_items/{itemId}": {
+      "schema": "object",
+      "description": "Custom store rewards to redeem."
+    },
+    "/users/{userId}/pages/{pageId}/gamification/{docId}": {
+      "schema": "object",
+      "description": "Stats or inventory configurations."
+    },
+    "/users/{userId}/saved_covers/{coverId}": {
+      "schema": "object",
+      "description": "User's saved header and cover backgrounds."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": "object",
+      "description": "User preferences and workspace configurations."
+    }
+  }
+}

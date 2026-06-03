@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { format, addDays, startOfDay, differenceInSeconds } from 'date-fns';
 import { Clock, Globe, Zap, Settings2, ChevronLeft } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from '@/context/RouterContext';
 
 export function Header() {
   const { settings } = useWorkspace();

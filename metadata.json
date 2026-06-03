@@ -1,0 +1,6 @@
+{
+  "name": "Nova",
+  "description": "A productivity workspace featuring block notes, databases, calendars, and gamified habit tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname } from '@/context/RouterContext';
 
 export function MobileLayoutWrapper({ sidebar, main }: { sidebar: React.ReactNode, main: React.ReactNode }) {
   const pathname = usePathname();

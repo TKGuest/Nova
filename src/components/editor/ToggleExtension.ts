@@ -57,7 +57,7 @@ export default Node.create({
     return ReactNodeViewRenderer(ToggleNodeView);
   },
 
-  addCommands() {
+  addCommands(): any {
     return {
       toggleToggle: () => ({ commands, state }: { commands: any, state: any }) => {
         const { selection } = state;
