@@ -73,6 +73,12 @@ export interface HabitStats {
   decayValue?: number;           // Points lost per missed day (default 5)
   streakMultiplierActive?: boolean; // Whether streak multiplier applies (default true)
   dailyPointCap?: number;        // Max points earnable per day (default 200)
+  
+  // Duolingo-style streak engine
+  currentStreak?: number;
+  longestStreak?: number;
+  lastActiveDate?: string;
+  streakFrozen?: boolean;
 }
 
 export interface InventoryItem {

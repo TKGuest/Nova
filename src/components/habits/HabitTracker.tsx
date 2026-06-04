@@ -17,6 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { LexoRank } from 'lexorank';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { GamificationDashboard } from './GamificationDashboard';
+import { playAscendingFanfare, playDing } from '@/lib/sounds';
 
 type PropertyType = 'habit' | 'counter' | 'notes' | 'toggle_list' | 'task_counter';
 type TextSize = 'small' | 'medium' | 'large';
@@ -81,6 +82,53 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, label: string } | null>(null);
   const [isGamificationOpen, setIsGamificationOpen] = useState(false);
   const [gamificationStats, setGamificationStats] = useState<HabitStats | null>(null);
+
+  const currentStreak = gamificationStats?.currentStreak ?? 0;
+  const longestStreak = gamificationStats?.longestStreak ?? 0;
+  const lastActiveDate = gamificationStats?.lastActiveDate ?? "";
+  const streakFrozen = gamificationStats?.streakFrozen ?? false;
+
+  // Duolingo-style Streak Engine Checking on Load / Render
+  useEffect(() => {
+    if (!user || !pageId || !gamificationStats) return;
+
+    const checkAndResetStreak = async () => {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+      
+      const lastActive = gamificationStats.lastActiveDate || "";
+      const currentST = gamificationStats.currentStreak ?? 0;
+      const isFrozen = gamificationStats.streakFrozen ?? false;
+
+      // Only check if lastActive is set and is older than yesterday
+      if (lastActive && lastActive !== todayStr && lastActive !== yesterdayStr) {
+        const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+        if (currentST > 0) {
+          if (!isFrozen) {
+            // Streak broken, reset to 0
+            await updateDoc(statsRef, {
+              currentStreak: 0,
+            });
+            showToast("Your 🔥 streak was reset. Keep up the daily habits!", "info");
+          } else {
+            // Streak was frozen! Save from reset, check is consumed
+            await updateDoc(statsRef, {
+              streakFrozen: false,
+              lastActiveDate: yesterdayStr
+            });
+            showToast("Streak Freeze saved your 🔥 streak!", "success");
+          }
+        } else if (isFrozen) {
+          // If 0 streak but frozen, just unfreeze
+          await updateDoc(statsRef, {
+            streakFrozen: false
+          });
+        }
+      }
+    };
+
+    checkAndResetStreak();
+  }, [user, pageId, gamificationStats?.lastActiveDate, gamificationStats?.currentStreak, gamificationStats?.streakFrozen]);
   
   // Shop & Inventory States
   const [isShopOpen, setIsShopOpen] = useState(false);
@@ -559,13 +607,42 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           allHabitsBonusAwarded: bonusAwarded
         });
         
-        await updateDoc(statsRef, { 
+        let currentST = stats.currentStreak ?? 0;
+        let longestST = stats.longestStreak ?? 0;
+        let lastActive = stats.lastActiveDate || "";
+        let streakExtended = false;
+
+        if (isCompleted) {
+          if (lastActive !== todayStr) {
+            currentST += 1;
+            if (currentST > longestST) {
+              longestST = currentST;
+            }
+            lastActive = todayStr;
+            streakExtended = true;
+          }
+          playDing();
+        }
+
+        const statsUpdates: any = { 
           points: finalPoints,
           pointsEarnedToday,
           lastPointGainDate: todayStr,
           debt: finalPoints < 0,
           taskStreaks
-        });
+        };
+        if (isCompleted) {
+          statsUpdates.currentStreak = currentST;
+          statsUpdates.longestStreak = longestST;
+          statsUpdates.lastActiveDate = lastActive;
+        }
+
+        await updateDoc(statsRef, statsUpdates);
+
+        if (streakExtended) {
+          playAscendingFanfare();
+          showToast(`🔥 Streak Extended! ${currentST} Days!`, "success");
+        }
 
         if (isCompleted) {
           showPointAnnouncement(actualGain > 0 ? `+${actualGain} pts` : 'Daily cap reached', actualGain);
@@ -1026,6 +1103,24 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             >
               <Gamepad2 size={14}/> Gamify
             </button>
+
+            {/* Duolingo Flame Streak Badge */}
+            <div 
+              className="flex items-center gap-1.5 px-2.5 md:px-4 py-1.5 md:py-2.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-wider relative group/flame cursor-help select-none shrink-0"
+            >
+              <span className={`text-[13px] md:text-base leading-none transition-all ${currentStreak > 0 ? 'text-amber-500 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'text-zinc-600'}`}>
+                🔥
+              </span>
+              <span className={`font-black ${currentStreak > 0 ? 'text-amber-400' : 'text-zinc-600'}`}>
+                {currentStreak}
+              </span>
+              
+              {/* Tooltip */}
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-[#141414] border border-[#2d2d2d] text-gray-300 text-[10px] py-1.5 px-3 rounded-md shadow-2xl opacity-0 group-hover/flame:opacity-100 pointer-events-none transition-all z-[999] whitespace-nowrap font-bold normal-case">
+                Longest Streak: <span className="text-amber-400">{longestStreak} days</span> {currentStreak > 0 && lastActiveDate === format(new Date(), 'yyyy-MM-dd') ? ' (Secured today!)' : ''}
+              </div>
+            </div>
+
             <div className="relative">
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }}
