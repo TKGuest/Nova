@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc, addDoc } from 'firebase/firestore';
-import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Package, Edit2 } from 'lucide-react';
+import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Package, Edit2, Receipt } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -137,14 +137,19 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
   const [newItemModal, setNewItemModal] = useState(false);
+  const [isSpendingModalOpen, setIsSpendingModalOpen] = useState(false);
+  const [spendingPoints, setSpendingPoints] = useState<number>(0);
+  const [spendingNote, setSpendingNote] = useState<string>('');
   const { showToast, confirm: customConfirm } = useNotification();
 
   // Custom point announcement toasts
   const [announcements, setAnnouncements] = useState<{ id: number; text: string; delta: number }[]>([]);
   const showPointAnnouncement = (text: string, delta: number) => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setAnnouncements(prev => [...prev, { id, text, delta }]);
-    setTimeout(() => setAnnouncements(prev => prev.filter(a => a.id !== id)), 2800);
+    setTimeout(() => {
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+    }, 2800);
   };
 
   const sensors = useSensors(
@@ -155,7 +160,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   // Lock body scroll when modals/drawers are open on mobile
   useEffect(() => {
-    const isModalOpen = !!sidePeekRecordId || isShopOpen || isPropertyModalOpen || isDefaultCoverModalOpen || isDatePickerOpen !== null || newItemModal || !!editingItem;
+    const isModalOpen = !!sidePeekRecordId || isShopOpen || isPropertyModalOpen || isDefaultCoverModalOpen || isDatePickerOpen !== null || newItemModal || !!editingItem || isSpendingModalOpen;
     const scrollContainer = document.getElementById('main-scroll-container');
     
     if (isModalOpen) {
@@ -612,7 +617,11 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         let lastActive = stats.lastActiveDate || "";
         let streakExtended = false;
 
-        if (isCompleted) {
+        const targetTasks = stats.streakTargetTasks ?? 1;
+        const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && !!nextRecordData[t.id]).length;
+        const reachedStreakThreshold = countCompletedToday >= targetTasks;
+
+        if (reachedStreakThreshold) {
           if (lastActive !== todayStr) {
             currentST += 1;
             if (currentST > longestST) {
@@ -621,7 +630,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             lastActive = todayStr;
             streakExtended = true;
           }
-          playDing();
+          if (isCompleted) {
+            playDing();
+          }
+        } else {
+          if (lastActive === todayStr) {
+            currentST = Math.max(0, currentST - 1);
+            lastActive = stats.lastActiveDateBeforeToday || "";
+          }
         }
 
         const statsUpdates: any = { 
@@ -629,13 +645,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           pointsEarnedToday,
           lastPointGainDate: todayStr,
           debt: finalPoints < 0,
-          taskStreaks
+          taskStreaks,
+          currentStreak: currentST,
+          longestStreak: longestST,
+          lastActiveDate: lastActive,
+          lastActiveDateBeforeToday: reachedStreakThreshold && lastActive === todayStr ? (stats.lastActiveDateBeforeToday || stats.lastActiveDate || "") : (stats.lastActiveDateBeforeToday || "")
         };
-        if (isCompleted) {
-          statsUpdates.currentStreak = currentST;
-          statsUpdates.longestStreak = longestST;
-          statsUpdates.lastActiveDate = lastActive;
-        }
 
         await updateDoc(statsRef, statsUpdates);
 
@@ -816,19 +831,55 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     // Check Completed All Habits Daily Bonus
     const { points: finalPoints, bonusAwarded } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
     
+    let currentST = stats.currentStreak ?? 0;
+    let longestST = stats.longestStreak ?? 0;
+    let lastActive = stats.lastActiveDate || "";
+    let streakExtended = false;
+
+    const targetTasks = stats.streakTargetTasks ?? 1;
+    const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && !!nextRecordData[t.id]).length;
+    const reachedStreakThreshold = countCompletedToday >= targetTasks;
+
+    if (reachedStreakThreshold) {
+      if (lastActive !== todayStr) {
+        currentST += 1;
+        if (currentST > longestST) {
+          longestST = currentST;
+        }
+        lastActive = todayStr;
+        streakExtended = true;
+      }
+    } else {
+      if (lastActive === todayStr) {
+        currentST = Math.max(0, currentST - 1);
+        lastActive = stats.lastActiveDateBeforeToday || "";
+      }
+    }
+
+    const statsUpdates: any = {
+      points: finalPoints,
+      pointsEarnedToday,
+      lastPointGainDate: todayStr,
+      debt: finalPoints < 0,
+      taskStreaks,
+      currentStreak: currentST,
+      longestStreak: longestST,
+      lastActiveDate: lastActive,
+      lastActiveDateBeforeToday: reachedStreakThreshold && lastActive === todayStr ? (stats.lastActiveDateBeforeToday || stats.lastActiveDate || "") : (stats.lastActiveDateBeforeToday || "")
+    };
+
     // Save all updates to Firestore
     await updateDoc(recordRef, { 
       data: nextRecordData,
       allHabitsBonusAwarded: bonusAwarded
     });
     
-    await updateDoc(statsRef, {
-      points: finalPoints,
-      pointsEarnedToday,
-      lastPointGainDate: todayStr,
-      debt: finalPoints < 0,
-      taskStreaks
-    });
+    await updateDoc(statsRef, statsUpdates);
+
+    if (streakExtended) {
+      playAscendingFanfare();
+      showToast(`🔥 Streak Extended! ${currentST} Days!`, "success");
+    }
 
     if (actualGain > 0) {
       showPointAnnouncement(
@@ -1020,12 +1071,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         const spendingRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', `spending_${todayStr}`);
         const spendingSnap = await getDoc(spendingRef);
         const spendingItems = spendingSnap.exists() ? (spendingSnap.data().items || []) : [];
+        const spendingItemId = `${item.id}_${Date.now()}`;
+        
         await setDoc(spendingRef, {
           date: todayStr,
           items: [
             ...spendingItems,
             {
-              id: `${item.id}_${Date.now()}`,
+              id: spendingItemId,
               itemId: item.id,
               name: item.name,
               type: item.type,
@@ -1034,9 +1087,85 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             }
           ]
         });
+
+        // Add to purchase history collection
+        await addDoc(collection(db, 'users', user.uid, 'pages', pageId, 'purchase_log'), {
+          itemId: item.id,
+          spendingItemId,
+          name: item.name,
+          type: item.type,
+          cost: item.cost,
+          purchasedAt: new Date().toISOString(),
+          reverted: false
+        });
+
         showToast(`${item.name} purchased!`, 'success');
       }
     });
+  };
+
+  const handleSpendingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !gamificationStats) return;
+    if (spendingPoints <= 0) {
+      showToast('Please enter a positive point amount.', 'error');
+      return;
+    }
+    if (!spendingNote.trim()) {
+      showToast('Please enter a description for what you bought.', 'error');
+      return;
+    }
+    if (gamificationStats.points < spendingPoints) {
+      showToast('Insufficient points!', 'error');
+      return;
+    }
+
+    try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const spendingRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', `spending_${todayStr}`);
+      const spendingSnap = await getDoc(spendingRef);
+      const spendingItems = spendingSnap.exists() ? (spendingSnap.data().items || []) : [];
+      
+      const spendingItemId = `manual_${Date.now()}`;
+      const newSpendingItem = {
+        id: spendingItemId,
+        itemId: 'manual',
+        name: spendingNote,
+        type: 'spending',
+        cost: spendingPoints,
+        purchasedAt: new Date().toISOString()
+      };
+
+      await setDoc(spendingRef, {
+        date: todayStr,
+        items: [...spendingItems, newSpendingItem]
+      });
+
+      // Deduct points
+      const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+      await updateDoc(statsRef, { points: gamificationStats.points - spendingPoints });
+
+      // Add to historic log
+      await addDoc(collection(db, 'users', user.uid, 'pages', pageId, 'purchase_log'), {
+        itemId: 'manual',
+        spendingItemId,
+        name: spendingNote,
+        type: 'spending',
+        cost: spendingPoints,
+        purchasedAt: new Date().toISOString(),
+        reverted: false
+      });
+
+      showToast(`Manual spending of ${spendingPoints} pts logged!`, 'success');
+      
+      // Cleanup & Close
+      setSpendingPoints(0);
+      setSpendingNote('');
+      setIsSpendingModalOpen(false);
+    } catch (err) {
+      console.error("Spending save error:", err);
+      showToast('Error saving spending.', 'error');
+    }
   };
 
   const handleCreateShopItem = async (itemData: Omit<ShopItem, 'id'>) => {
@@ -1103,23 +1232,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             >
               <Gamepad2 size={14}/> Gamify
             </button>
-
-            {/* Duolingo Flame Streak Badge */}
-            <div 
-              className="flex items-center gap-1.5 px-2.5 md:px-4 py-1.5 md:py-2.5 bg-[#1a1a1a] border border-[#2d2d2d] rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-wider relative group/flame cursor-help select-none shrink-0"
-            >
-              <span className={`text-[13px] md:text-base leading-none transition-all ${currentStreak > 0 ? 'text-amber-500 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'text-zinc-600'}`}>
-                🔥
-              </span>
-              <span className={`font-black ${currentStreak > 0 ? 'text-amber-400' : 'text-zinc-600'}`}>
-                {currentStreak}
-              </span>
-              
-              {/* Tooltip */}
-              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-[#141414] border border-[#2d2d2d] text-gray-300 text-[10px] py-1.5 px-3 rounded-md shadow-2xl opacity-0 group-hover/flame:opacity-100 pointer-events-none transition-all z-[999] whitespace-nowrap font-bold normal-case">
-                Longest Streak: <span className="text-amber-400">{longestStreak} days</span> {currentStreak > 0 && lastActiveDate === format(new Date(), 'yyyy-MM-dd') ? ' (Secured today!)' : ''}
-              </div>
-            </div>
 
             <div className="relative">
               <button 
@@ -1197,21 +1309,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         if (!user) return;
                         await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { dailyPointCap: value });
                       }} />
-                      <div className="bg-[#111] border border-[#2d2d2d] rounded-lg p-3 flex flex-col justify-between gap-3">
-                        <div>
-                          <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Streak Multiplier</span>
-                          <span className="text-[9px] text-gray-600 leading-normal block mt-1">Apply streak multiplier to point gains.</span>
-                        </div>
-                        <button
-                          onClick={async () => {
-                            if (!user) return;
-                            await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakMultiplierActive: gamificationStats?.streakMultiplierActive === false });
-                          }}
-                          className={`px-3 py-2 rounded text-[10px] font-black uppercase tracking-widest transition-all ${gamificationStats?.streakMultiplierActive === false ? 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-500' : 'bg-green-500/15 border border-green-500/30 text-green-400'}`}
-                        >
-                          {gamificationStats?.streakMultiplierActive === false ? 'Off' : 'On'}
-                        </button>
-                      </div>
+                      <SettingsNumberInput 
+                        label="Streak Target Tasks" 
+                        description="Daily tasks needed for streak." 
+                        value={gamificationStats?.streakTargetTasks ?? 1} 
+                        onCommit={async (value) => {
+                          if (!user) return;
+                          await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakTargetTasks: value });
+                        }} 
+                      />
                     </div>
                   </div>
                   </div>
@@ -1608,6 +1714,14 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             </div>
 
             <div className="flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar overscroll-contain touch-pan-y">
+              {/* Spending Entry Hook */}
+              <button 
+                onClick={() => setIsSpendingModalOpen(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-yellow-600/10 hover:bg-yellow-600/20 text-yellow-500 hover:text-yellow-400 border border-yellow-500/25 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-yellow-500/5 hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Receipt size={14} className="shrink-0 animate-pulse text-yellow-500" /> Spending
+              </button>
+
               {isEditMode && (
                 <button 
                   onClick={() => setNewItemModal(true)} 
@@ -1699,6 +1813,59 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         onSubmit={handleUpdateShopItem}
         initialItem={editingItem}
       />
+
+      {/* Spending Form Modal */}
+      <Modal 
+        isOpen={isSpendingModalOpen} 
+        onClose={() => setIsSpendingModalOpen(false)} 
+        title="Log Spending" 
+        maxWidth="420px"
+      >
+        <form onSubmit={handleSpendingSubmit} className="p-5 space-y-4 text-left">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest block">Points Spent</label>
+            <input 
+              type="number"
+              required
+              min={1}
+              value={spendingPoints || ''}
+              onChange={(e) => setSpendingPoints(Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm font-bold text-gray-200 outline-none focus:border-yellow-500/50 transition-colors"
+              placeholder="e.g. 50"
+              onWheel={(e) => e.currentTarget.blur()}
+            />
+            <span className="text-[9px] text-gray-500 block mt-1">Available balance: {(gamificationStats?.points || 0).toLocaleString()} pts</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest block">Bought For (Note)</label>
+            <textarea
+              required
+              rows={3}
+              value={spendingNote}
+              onChange={(e) => setSpendingNote(e.target.value)}
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm font-medium text-gray-200 outline-none focus:border-yellow-500/50 transition-colors resize-none"
+              placeholder="What did you buy? e.g. Spent 1 hour watching YouTube"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#2d2d2d]/30">
+            <button 
+              type="button" 
+              onClick={() => setIsSpendingModalOpen(false)}
+              className="px-4 py-2 bg-[#222] border border-[#333] hover:bg-[#2e2e2e] text-gray-300 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:scale-[1.02] cursor-pointer"
+            >
+              Log Purchase
+            </button>
+          </div>
+        </form>
+      </Modal>
     </DndContext>
   );
 }

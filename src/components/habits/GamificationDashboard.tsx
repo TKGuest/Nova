@@ -2,10 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, collection, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { HabitStats, InventoryItem } from '@/types';
-import { Shield, Timer, Play, ShoppingBag, Sparkles, Package, Receipt } from 'lucide-react';
+import { Shield, Timer, Play, ShoppingBag, Sparkles, Package, Receipt, History, RotateCcw } from 'lucide-react';
 import { useNotification } from '@/context/NotificationContext';
 import { format } from 'date-fns';
 
@@ -20,9 +20,11 @@ export function GamificationDashboard({
   const { showToast } = useNotification();
   const [stats, setStats] = useState<HabitStats | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [spentToday, setSpentToday] = useState<{ id: string; name: string; cost: number; type: string; purchasedAt: string }[]>([]);
+  const [spentToday, setSpentToday] = useState<{ id: string; name: string; itemId?: string; cost: number; type: string; purchasedAt: string }[]>([]);
   const [activeTimer, setActiveTimer] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'today' | 'history'>('today');
+  const [purchaseHistory, setPurchaseHistory] = useState<{ id: string; name: string; cost: number; type: string; purchasedAt: string; reverted?: boolean }[]>([]);
 
   useEffect(() => {
     if (!user || !pageId) return;
@@ -65,10 +67,24 @@ export function GamificationDashboard({
       setSpentToday(docSnap.exists() ? (docSnap.data().items || []) : []);
     });
 
+    // Listen to all purchase logs
+    const histRef = collection(db, 'users', user.uid, 'pages', pageId, 'purchase_log');
+    const q = query(histRef, orderBy('purchasedAt', 'desc'));
+    const unsubHist = onSnapshot(q, (snapshot) => {
+      const items: any[] = [];
+      snapshot.forEach(docSnap => {
+        items.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setPurchaseHistory(items);
+    }, (err) => {
+      console.warn("History sub failed:", err);
+    });
+
     return () => {
       unsubStats();
       unsubInv();
       unsubSpending();
+      unsubHist();
     };
   }, [user, pageId]);
 
@@ -238,6 +254,53 @@ export function GamificationDashboard({
     showToast('Holiday Pass active until day end!', 'success');
   };
 
+  const handleRevertPurchase = async (spendingItem: any) => {
+    if (!user || !stats) return;
+
+    const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+    const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const spendingRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', `spending_${todayStr}`);
+
+    try {
+      // 1. Refund points
+      const nextPoints = (stats.points || 0) + spendingItem.cost;
+      await updateDoc(statsRef, { 
+        points: nextPoints,
+        debt: nextPoints < 0
+      });
+
+      // 2. Remove 1 quantity from inventory if it's a real shop item
+      if (spendingItem.itemId && spendingItem.itemId !== 'manual') {
+        const nextInventory = inventory.map(i => {
+          if (i.id === spendingItem.itemId) return { ...i, quantity: i.quantity - 1 };
+          return i;
+        }).filter(i => i.quantity > 0);
+        await updateDoc(invRef, { items: nextInventory });
+      }
+
+      // 3. Update Spent Today list
+      const nextSpentToday = spentToday.filter(i => i.id !== spendingItem.id);
+      await updateDoc(spendingRef, { items: nextSpentToday });
+
+      // 4. Mark as reverted in history log!
+      const { getDocs, where } = await import('firebase/firestore');
+      const histRef = collection(db, 'users', user.uid, 'pages', pageId, 'purchase_log');
+      const q = query(histRef, where('spendingItemId', '==', spendingItem.id));
+      const qSnap = await getDocs(q);
+      qSnap.forEach(async (dDoc) => {
+        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'purchase_log', dDoc.id), {
+          reverted: true
+        });
+      });
+
+      showToast(`Reverted "${spendingItem.name}" and refunded ${spendingItem.cost} points!`, 'success');
+    } catch (err) {
+      console.error("Revert purchase error:", err);
+      showToast('Error reverting purchase.', 'error');
+    }
+  };
+
   return (
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
       {/* Left Column: Stats */}
@@ -337,32 +400,87 @@ export function GamificationDashboard({
         </div>
       </div>
       <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 md:col-span-2 text-left">
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <h2 className="text-[11px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
-            <Receipt size={14} /> Spent Today
-          </h2>
-          <span className="text-[11px] font-black text-purple-300">{spentTotal.toLocaleString()} pts</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-[#2d2d2d] pb-2">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setActiveTab('today')}
+              className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 pb-1 border-b-2 transition-all cursor-pointer ${activeTab === 'today' ? 'text-purple-400 border-purple-500 font-extrabold' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+            >
+              <Receipt size={14} /> Spent Today
+            </button>
+            <button 
+              onClick={() => setActiveTab('history')}
+              className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 pb-1 border-b-2 transition-all cursor-pointer ${activeTab === 'history' ? 'text-purple-400 border-purple-500 font-extrabold' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+            >
+              <History size={14} /> Purchase History Log
+            </button>
+          </div>
+          {activeTab === 'today' && (
+            <span className="text-[11px] font-black text-purple-300">{spentTotal.toLocaleString()} pts</span>
+          )}
         </div>
-        {spentToday.length === 0 ? (
-          <div className="text-center py-6 border border-dashed border-[#333] rounded-lg text-gray-500 text-sm">
-            No purchases today.
-          </div>
-        ) : (
-          <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
-            {spentToday.slice().reverse().map(item => (
-              <div key={item.id} className="flex items-center justify-between gap-3 p-3 bg-[#111] border border-[#222] rounded-lg">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Package size={14} className="text-amber-400 shrink-0" />
-                    <span className="text-sm font-bold text-gray-200 truncate">{item.name}</span>
-                    <span className="text-[8px] font-black uppercase tracking-wider text-gray-600 bg-[#1a1a1a] px-1 py-0.2 rounded border border-[#2d2d2d]">{item.type}</span>
+
+        {activeTab === 'today' ? (
+          spentToday.length === 0 ? (
+            <div className="text-center py-6 border border-dashed border-[#333] rounded-lg text-gray-500 text-sm">
+              No purchases today.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+              {spentToday.slice().reverse().map(item => (
+                <div key={item.id} className="flex items-center justify-between gap-3 p-3 bg-[#111] border border-[#222] rounded-lg">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Package size={14} className="text-amber-400 shrink-0" />
+                      <span className="text-sm font-bold text-gray-200 truncate">{item.name}</span>
+                      <span className="text-[8px] font-black uppercase tracking-wider text-gray-600 bg-[#1a1a1a] px-1 py-0.2 rounded border border-[#2d2d2d]">{item.type}</span>
+                    </div>
+                    <span className="text-[10px] text-gray-600 block mt-1">{format(new Date(item.purchasedAt), 'h:mm a')}</span>
                   </div>
-                  <span className="text-[10px] text-gray-600 block mt-1">{format(new Date(item.purchasedAt), 'h:mm a')}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-black text-purple-300 shrink-0">{item.cost} pts</span>
+                    <button 
+                      onClick={() => handleRevertPurchase(item)}
+                      className="p-1 px-2 text-[9px] font-black uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded border border-red-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                      title="Revert Purchase"
+                    >
+                      <RotateCcw size={10} /> Revert
+                    </button>
+                  </div>
                 </div>
-                <span className="text-xs font-black text-purple-300 shrink-0">{item.cost} pts</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
+        ) : (
+          purchaseHistory.length === 0 ? (
+            <div className="text-center py-6 border border-dashed border-[#333] rounded-lg text-gray-500 text-sm">
+              No purchase history.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+              {purchaseHistory.map(item => (
+                <div key={item.id} className="flex items-center justify-between gap-3 p-3 bg-[#111] border border-[#222] rounded-lg">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Package size={14} className={`${item.reverted ? 'text-zinc-600' : 'text-amber-500'} shrink-0`} />
+                      <span className={`text-sm font-bold truncate ${item.reverted ? 'text-zinc-500 line-through' : 'text-gray-200'}`}>{item.name}</span>
+                      <span className="text-[8px] font-black uppercase tracking-wider text-gray-600 bg-[#1a1a1a] px-1 py-0.2 rounded border border-[#2d2d2d]">{item.type}</span>
+                    </div>
+                    <span className="text-[10px] text-gray-600 block mt-1">
+                      {format(new Date(item.purchasedAt), 'yyyy-MM-dd h:mm a')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {item.reverted ? (
+                      <span className="text-[9px] font-black uppercase tracking-wider text-red-500 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">Reverted</span>
+                    ) : (
+                      <span className="text-xs font-black text-purple-300">{item.cost} pts</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>

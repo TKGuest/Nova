@@ -79,6 +79,7 @@ export interface HabitStats {
   longestStreak?: number;
   lastActiveDate?: string;
   streakFrozen?: boolean;
+  streakTargetTasks?: number;
 }
 
 export interface InventoryItem {

@@ -4,11 +4,52 @@ import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { format, addDays, startOfDay, differenceInSeconds } from 'date-fns';
 import { Clock, Globe, Zap, Settings2, ChevronLeft } from 'lucide-react';
-import { Link } from '@/context/RouterContext';
+import { Link, usePathname } from '@/context/RouterContext';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export function Header() {
   const { settings } = useWorkspace();
   const [now, setNow] = useState(new Date());
+  const { user } = useAuth();
+  const pathname = usePathname();
+  const [streakData, setStreakData] = useState<{ currentStreak: number; longestStreak: number; lastActiveDate?: string } | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setStreakData(null);
+      return;
+    }
+
+    let pageId = '';
+    if (pathname.startsWith('/page/')) {
+      pageId = pathname.slice('/page/'.length);
+    }
+    
+    if (!pageId) {
+      setStreakData(null);
+      return;
+    }
+
+    const docRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+    const unsub = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const d = docSnap.data();
+        setStreakData({
+          currentStreak: d.currentStreak ?? 0,
+          longestStreak: d.longestStreak ?? 0,
+          lastActiveDate: d.lastActiveDate || '',
+        });
+      } else {
+        setStreakData({ currentStreak: 0, longestStreak: 0 });
+      }
+    }, () => {
+      // ignore
+    });
+
+    return () => unsub();
+  }, [user, pathname]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -52,7 +93,7 @@ export function Header() {
         </Link>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4">
         {/* UTC Clock */}
         <div className="flex items-center gap-2 px-3 py-1 bg-[#252526] border border-[#3e3e3e] rounded-md shadow-sm">
           <Globe size={14} className="text-blue-400" />
@@ -60,6 +101,25 @@ export function Header() {
             {now.toUTCString().split(' ')[4]} UTC
           </span>
         </div>
+
+        {/* Streak Badge */}
+        {streakData && (
+          <div 
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#252526] border border-[#3e3e3e] rounded-md text-[11px] font-black uppercase tracking-wider relative group/flame cursor-help select-none shrink-0"
+          >
+            <span className={`text-[12px] md:text-[14px] leading-none transition-all ${streakData.currentStreak > 0 ? 'text-amber-500 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'text-zinc-600'}`}>
+              🔥
+            </span>
+            <span className={`font-mono text-[11px] font-black ${streakData.currentStreak > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
+              {streakData.currentStreak}
+            </span>
+            
+            {/* Tooltip */}
+            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-[#141414] border border-[#2d2d2d] text-gray-300 text-[10px] py-1.5 px-3 rounded-md shadow-2xl opacity-0 group-hover/flame:opacity-100 pointer-events-none transition-all z-[999] whitespace-nowrap font-bold normal-case">
+              Longest Streak: <span className="text-amber-400">{streakData.longestStreak} days</span> {streakData.currentStreak > 0 && streakData.lastActiveDate === format(new Date(), 'yyyy-MM-dd') ? ' (Secured today!)' : ''}
+            </div>
+          </div>
+        )}
 
         {/* Countdown Module */}
         <div className="flex flex-col items-end min-w-[120px]">
