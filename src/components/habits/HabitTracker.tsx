@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc, addDoc } from 'firebase/firestore';
-import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Package, Edit2, Receipt } from 'lucide-react';
+import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Package, Edit2, Receipt, FileText } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -13,6 +13,97 @@ import { useNotification } from '@/context/NotificationContext';
 import { format, isSameDay, startOfDay, eachDayOfInterval, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, parseISO, addDays, isAfter, isSameWeek, getYear, getMonth, addMonths, subMonths, setYear, setMonth, isSameMonth } from 'date-fns';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+
+function parseNotesWithLinks(text: string, pages: PageModel[]): React.ReactNode {
+  if (!text) {
+    return <span className="text-gray-700 italic">No notes logged...</span>;
+  }
+
+  const urlRegex = /(https?:\/\/[^\s\n]+|www\.[^\s\n]+)/gi;
+  const pageRegex = /\[@([^\]]+)\]\(\/page\/([^\)]+)\)/g;
+  
+  let matches: any[] = [];
+  let match;
+  
+  // 1. Find all Page mentions
+  pageRegex.lastIndex = 0;
+  while ((match = pageRegex.exec(text)) !== null) {
+    matches.push({
+      index: match.index,
+      length: match[0].length,
+      type: 'page',
+      title: match[1],
+      pageId: match[2],
+      url: `/page/${match[2]}`
+    });
+  }
+  
+  // 2. Find all URLs
+  urlRegex.lastIndex = 0;
+  while ((match = urlRegex.exec(text)) !== null) {
+    const uIndex = match.index;
+    const uLen = match[0].length;
+    const insidePageLink = matches.some(m => uIndex >= m.index && (uIndex + uLen) <= (m.index + m.length));
+    if (!insidePageLink) {
+      matches.push({
+        index: uIndex,
+        length: uLen,
+        type: 'url',
+        title: match[0],
+        url: match[0].toLowerCase().startsWith('www.') ? `https://${match[0]}` : match[0]
+      });
+    }
+  }
+  
+  // Sort matches by index
+  matches.sort((a, b) => a.index - b.index);
+  
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  
+  matches.forEach((m, idx) => {
+    if (m.index > lastIndex) {
+      elements.push(<span key={`text-seq-${idx}`}>{text.substring(lastIndex, m.index)}</span>);
+    }
+    
+    if (m.type === 'page') {
+      elements.push(
+        <a 
+          key={`page-lnk-${idx}`} 
+          href={m.url} 
+          onClick={(e) => {
+            e.stopPropagation();
+            window.location.href = m.url;
+          }}
+          className="text-purple-400 hover:underline hover:text-purple-300 font-bold inline-flex items-center gap-0.5 bg-purple-500/10 px-1 py-0.2 rounded border border-purple-500/20"
+        >
+          📄 @{m.title}
+        </a>
+      );
+    } else {
+      elements.push(
+        <a 
+          key={`url-lnk-${idx}`} 
+          href={m.url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-blue-400 hover:underline hover:text-blue-300 break-all inline"
+        >
+          {m.title}
+        </a>
+      );
+    }
+    
+    lastIndex = m.index + m.length;
+  });
+  
+  if (lastIndex < text.length) {
+    elements.push(<span key="text-seq-end">{text.substring(lastIndex)}</span>);
+  }
+  
+  return <span className="leading-relaxed whitespace-pre-wrap select-text">{elements}</span>;
+}
 import { CSS } from '@dnd-kit/utilities';
 import { LexoRank } from 'lexorank';
 import { CoverImage } from '@/components/ui/CoverImage';
@@ -45,6 +136,10 @@ interface MasterTask {
   counterPoints?: number;       // Points per increment (can be negative)
   counterLimit?: number;        // Max daily completions (0 = unlimited)
   counterBonusPoints?: number;  // Bonus for first increment each day
+  
+  // Custom notes options
+  notesMode?: 'separate' | 'sync';
+  syncedNoteText?: string;
 }
 
 interface PageRecord {
@@ -141,6 +236,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [spendingPoints, setSpendingPoints] = useState<number>(0);
   const [spendingNote, setSpendingNote] = useState<string>('');
   const { showToast, confirm: customConfirm } = useNotification();
+  const [allPages, setAllPages] = useState<PageModel[]>([]);
 
   // Custom point announcement toasts
   const [announcements, setAnnouncements] = useState<{ id: number; text: string; delta: number }[]>([]);
@@ -231,6 +327,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const unsubMaster = onSnapshot(qMaster, (snapshot) => {
       setMasterTasks(snapshot.docs.map(d => ({ type: 'habit', ...d.data(), id: d.id } as MasterTask)));
     });
+    const qPages = query(collection(db, 'users', user.uid, 'pages'), orderBy('createdAt', 'asc'));
+    const unsubPages = onSnapshot(qPages, (snapshot) => {
+      setAllPages(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as PageModel)));
+    });
     const qRecords = query(collection(db, 'users', user.uid, 'pages', pageId, 'records'), orderBy('date', 'desc'));
     const unsubRecords = onSnapshot(qRecords, (snapshot) => {
       setRecords(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as PageRecord)));
@@ -258,15 +358,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             name: 'Streak Insurance',
             description: 'Prevents your streak multiplier from resetting for 1 missed day.',
             cost: 500,
-            type: 'buff',
-            durationHours: 24
-          },
-          {
-            name: 'Holiday Pass (Skip Day)',
-            description: 'Take a break without penalty. Stats are frozen for the day.',
-            cost: 1000,
-            type: 'buff',
-            durationHours: 24
+            type: 'instant'
           },
           {
             name: '10 Min Focus Timer',
@@ -280,7 +372,19 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           await addDoc(shopRef, item);
         }
       } else {
-        setShopItems(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ShopItem)));
+        const items = snapshot.docs
+          .map(d => ({ ...d.data(), id: d.id } as ShopItem))
+          .filter(item => !item.name.toLowerCase().includes('holiday pass'));
+        
+        const updatedItems = items.map(item => {
+          if (item.name.toLowerCase().includes('streak insurance') && item.type !== 'instant') {
+            updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'shop_items', item.id), { type: 'instant' });
+            return { ...item, type: 'instant' as const };
+          }
+          return item;
+        });
+
+        setShopItems(updatedItems);
       }
     });
     const handleOpenManager = () => setIsPropertyModalOpen(true);
@@ -291,7 +395,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
     window.addEventListener('click', handleClick);
     return () => { 
-      unsubMaster(); unsubRecords(); unsubPage(); unsubStats(); unsubInv(); unsubShop();
+      unsubMaster(); unsubRecords(); unsubPage(); unsubStats(); unsubInv(); unsubShop(); unsubPages();
       window.removeEventListener('open-task-manager', handleOpenManager);
       window.removeEventListener('click', handleClick);
     };
@@ -1026,18 +1130,31 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   const handleBuyItem = async (item: ShopItem) => {
     if (!user || !gamificationStats) return;
-    if (gamificationStats.debt || gamificationStats.points < item.cost) {
+    const isInsurance = item.name.toLowerCase().includes('streak insurance');
+    const actualCost = isInsurance ? (gamificationStats.streakInsuranceCost ?? 500) : item.cost;
+    const maxLimit = isInsurance ? (gamificationStats.streakInsuranceMax ?? 1) : 9999;
+
+    if (isInsurance) {
+      const existingInsurance = inventory.find(i => i.name.toLowerCase().includes('streak insurance'));
+      const currentQty = existingInsurance ? existingInsurance.quantity : 0;
+      if (currentQty >= maxLimit) {
+        showToast(`You cannot hold more than ${maxLimit} Streak Insurance!`, 'error');
+        return;
+      }
+    }
+
+    if (gamificationStats.debt || gamificationStats.points < actualCost) {
       showToast('Not enough points or in Debt Mode!', 'error');
       return;
     }
 
     customConfirm({
       title: `Purchase ${item.name}?`,
-      message: `This will cost ${item.cost} points.`,
+      message: `This will cost ${actualCost} points.`,
       confirmLabel: 'Buy',
       onConfirm: async () => {
         const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
-        await updateDoc(statsRef, { points: gamificationStats.points - item.cost });
+        await updateDoc(statsRef, { points: gamificationStats.points - actualCost });
 
         const invRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'inventory');
         const existingItem = inventory.find(i => i.id === item.id);
@@ -1047,7 +1164,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           newItems = newItems.map(i => i.id === item.id ? {
             ...i,
             quantity: i.quantity + 1,
-            costPurchased: item.cost,
+            costPurchased: actualCost,
             durationHours: item.durationHours || i.durationHours,
             durationValue: item.durationValue ?? i.durationValue,
             durationUnit: item.durationUnit ?? i.durationUnit
@@ -1058,7 +1175,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             name: item.name,
             type: item.type,
             quantity: 1,
-            costPurchased: item.cost,
+            costPurchased: actualCost,
             durationHours: item.durationHours || 0,
             durationValue: item.durationValue,
             durationUnit: item.durationUnit
@@ -1082,7 +1199,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               itemId: item.id,
               name: item.name,
               type: item.type,
-              cost: item.cost,
+              cost: actualCost,
               purchasedAt: new Date().toISOString()
             }
           ]
@@ -1094,7 +1211,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           spendingItemId,
           name: item.name,
           type: item.type,
-          cost: item.cost,
+          cost: actualCost,
           purchasedAt: new Date().toISOString(),
           reverted: false
         });
@@ -1300,7 +1417,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                   </div>
                   <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3 md:col-span-2">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Gamification Rules</span>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                       <SettingsNumberInput label="Point Decay" description="Points lost per missed day." value={gamificationStats?.decayValue ?? 5} onCommit={async (value) => {
                         if (!user) return;
                         await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { decayValue: value });
@@ -1316,6 +1433,24 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         onCommit={async (value) => {
                           if (!user) return;
                           await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakTargetTasks: value });
+                        }} 
+                      />
+                      <SettingsNumberInput 
+                        label="Streak Insurance Cost" 
+                        description="Price of insurance in shop." 
+                        value={gamificationStats?.streakInsuranceCost ?? 500} 
+                        onCommit={async (value) => {
+                          if (!user) return;
+                          await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakInsuranceCost: value });
+                        }} 
+                      />
+                      <SettingsNumberInput 
+                        label="Streak Insurance Max" 
+                        description="Maximum inventory cap." 
+                        value={gamificationStats?.streakInsuranceMax ?? 1} 
+                        onCommit={async (value) => {
+                          if (!user) return;
+                          await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakInsuranceMax: value });
                         }} 
                       />
                     </div>
@@ -1365,12 +1500,18 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <h3 className={`font-black uppercase text-gray-700 tracking-widest mb-4 px-1 ${getSectionTitleClasses()}`}>Daily Habits</h3>
                       <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-0.5">
-                          {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter')).map(task => (
+                          {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes')).map(task => (
                               <SortableMasterItem 
                                 key={task.id} 
                                 id={`${record.id}::${task.id}`} 
                                 task={task} 
                                 allTasks={masterTasks}
+                                allPages={allPages}
+                                onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
+                                onUpdateRecordNotes={(taskId: string, text: string) => {
+                                  const rRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id);
+                                  updateDoc(rRef, { notes: text, [`data.notesMap.${taskId}`]: text });
+                                }}
                                 completed={!!record.data?.[task.id]} 
                                 recordData={record.data || {}}
                                 isPeek={true}
@@ -1411,20 +1552,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         </div>
                       ))}
 
-                      {masterTasks.filter(t => t.type === 'notes').map(t => (
-                        <div key={t.id} className="space-y-3">
-                          <div className="flex items-center gap-2 px-1">
-                            <StickyNote size={14} className="text-gray-600"/>
-                            <span className="text-[10px] font-black uppercase text-gray-600 tracking-widest">{t.name}</span>
-                          </div>
-                          <textarea 
-                            className={`w-full bg-[#111] border border-[#1a1a1a] rounded-xl p-4 text-gray-300 placeholder:text-gray-800 outline-none focus:border-[#2a2a2a] transition-all min-h-[150px] leading-relaxed ${textSize === 'large' ? 'text-base' : textSize === 'medium' ? 'text-sm' : 'text-[13px]'}`}
-                            placeholder="How was your day? Log your thoughts here..." 
-                            defaultValue={record.notes || ''} 
-                            onBlur={(e) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id), { notes: (e.target as HTMLTextAreaElement).value })} 
-                          />
-                        </div>
-                      ))}
+
                     </div>
                   </div>
                 );
@@ -1484,7 +1612,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             <div className="p-1 flex-1 flex flex-col">
                               <div className="space-y-0 min-h-[40px]">
                                 <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
-                                  {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter')).map(task => (
+                                  {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes')).map(task => (
                                     <SortableMasterItem 
                                       key={task.id} 
                                       id={`${record.id}::${task.id}`} 
@@ -1493,6 +1621,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                       completed={!!record.data?.[task.id]} 
                                       recordData={record.data || {}}
                                       isPeek={false}
+                                      allPages={allPages}
+                                      onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
+                                      onUpdateRecordNotes={(taskId: string, text: string) => {
+                                        const rRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id);
+                                        updateDoc(rRef, { notes: text, [`data.notesMap.${taskId}`]: text });
+                                      }}
                                       streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
                                       onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                       onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
@@ -1516,18 +1650,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                     <span className={`font-black text-blue-500/80 ${getSectionContentClasses()}`}>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
                                   </div>
                                 ))}
-                                {masterTasks.filter(t => t.type === 'notes').map(t => (
-                                  <div key={t.id} onClick={(e) => e.stopPropagation()} className={`px-1.5 py-1.5 bg-[#161616] rounded border border-[#1a1a1a] space-y-1 ${!isPeek ? 'hidden md:block' : ''}`}>
-                                    <span className={`font-black uppercase text-gray-600 tracking-widest block ${getSectionTitleClasses()}`}>{t.name}</span>
-                                    <textarea 
-                                      className={`w-full bg-transparent text-gray-400 placeholder:text-gray-800 outline-none resize-none p-0 border-none leading-tight ${getSectionContentClasses()}`} 
-                                      placeholder="Daily log..." 
-                                      defaultValue={record.notes || ''} 
-                                      onClick={(e) => e.stopPropagation()}
-                                      onBlur={(e) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id), { notes: (e.target as HTMLTextAreaElement).value })} 
-                                    />
-                                  </div>
-                                ))}
+
                               </div>
                             </div>
                           </div>
@@ -1789,7 +1912,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             onClick={() => handleBuyItem(item)}
                             className="shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-purple-500/10 cursor-pointer"
                           >
-                            {item.cost} <span className="opacity-70 text-[10px]">pts</span>
+                            {item.name.toLowerCase().includes('streak insurance') ? (gamificationStats?.streakInsuranceCost ?? 500) : item.cost} <span className="opacity-70 text-[10px]">pts</span>
                           </button>
                         )}
                       </div>
@@ -1945,6 +2068,13 @@ function SortableMasterItem(props: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !isPeek });
   const style = isPeek ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 } : {};
   const [tempName, setTempName] = useState(task.name);
+  const [mentionState, setMentionState] = useState<{
+    isOpen: boolean;
+    textBeforeMention: string;
+    searchInput: string;
+    cursorPosition: number;
+    textarea: HTMLTextAreaElement;
+  } | null>(null);
   
   // Persist expanded state in local storage keyed by task.id
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -1985,7 +2115,7 @@ function SortableMasterItem(props: any) {
   useEffect(() => { if (isEditing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [isEditing]);
   
   if (task.type === 'toggle_list') {
-    const children = (allTasks || []).filter((t: any) => t.parentId === task.id && t.type === 'habit');
+    const children = (allTasks || []).filter((t: any) => t.parentId === task.id && (t.type === 'habit' || t.type === 'notes'));
     const recordId = id.split('::')[0];
     const completedChildren = children.filter((child: any) => !!recordData?.[child.id]).length;
 
@@ -2110,6 +2240,148 @@ function SortableMasterItem(props: any) {
         )}
       </div>
     );
+  }
+
+  if (task.type === 'notes') {
+    const isSync = task.notesMode === 'sync';
+    const notesContent = isSync 
+      ? (task.syncedNoteText || '') 
+      : (recordData?.notesMap?.[task.id] ?? (task.parentId ? '' : recordData?.notes) ?? '');
+
+    const handleNotesChange = (text: string) => {
+      if (isSync) {
+        if (props.onUpdateMasterTask) {
+          props.onUpdateMasterTask(task.id, { syncedNoteText: text });
+        }
+      } else {
+        if (props.onUpdateRecordNotes) {
+          props.onUpdateRecordNotes(task.id, text);
+        }
+      }
+    };
+
+    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const val = e.target.value;
+      const cursor = e.target.selectionStart;
+      const textBefore = val.slice(0, cursor);
+      const match = textBefore.match(/@([a-zA-Z0-9_\s-]*)$/);
+      if (match) {
+        setMentionState({
+          isOpen: true,
+          textBeforeMention: textBefore.substring(0, textBefore.length - match[0].length),
+          searchInput: match[1],
+          cursorPosition: cursor,
+          textarea: e.target
+        });
+      } else {
+        setMentionState(null);
+      }
+      handleNotesChange(val);
+    };
+
+    if (isPeek) {
+      return (
+        <div ref={setNodeRef} style={style} className="flex flex-col mb-3 text-left">
+          <div onContextMenu={onContextMenu} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 px-1 py-1 rounded-md hover:bg-[#252526]/50 transition-all min-h-[22px] group/item">
+            {isPeek && (
+              <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                <GripVertical size={10} className="text-gray-800" />
+              </div>
+            )}
+            <StickyNote size={12} className="text-purple-400 shrink-0" />
+            
+            {isEditing ? (
+              <input 
+                ref={inputRef} 
+                className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} 
+                value={tempName} 
+                onChange={(e) => setTempName(e.target.value)} 
+                onBlur={() => onRename(tempName)} 
+                onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} 
+              />
+            ) : (
+              <span className={`flex-1 min-w-0 font-black text-gray-500 tracking-wider text-[11px] uppercase`}>
+                {task.name} <span className="text-[9px] font-medium text-gray-600 lowercase italic">({isSync ? 'sync' : 'separate'})</span>
+              </span>
+            )}
+          </div>
+
+          <div className="pl-5 pr-1 relative w-full mt-1">
+            <textarea
+              className={`w-full bg-[#111] border border-[#2d2d2d] rounded-lg p-3 text-gray-300 placeholder:text-gray-800 outline-none focus:border-purple-500/50 transition-all min-h-[100px] leading-relaxed resize-y ${textSizeClass}`}
+              placeholder="Log note content... Type @ to mention/link another page..."
+              value={notesContent}
+              onChange={handleTextareaChange}
+              onBlur={() => {
+                setTimeout(() => setMentionState(null), 250);
+              }}
+            />
+
+            {mentionState && mentionState.isOpen && (
+              <div 
+                className="absolute z-[999] bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg shadow-2xl p-1 w-64 max-h-48 overflow-y-auto mt-1 top-full left-5 flex flex-col gap-1 text-left"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <div className="px-2 py-1 text-[9px] font-black uppercase text-gray-500 tracking-wider border-b border-[#2d2d2d] mb-1 flex items-center justify-between">
+                  <span>Link to Page</span>
+                </div>
+                <div className="overflow-y-auto max-h-32 space-y-0.5 custom-scrollbar p-0.5">
+                  {(props.allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase())).map((page: any) => {
+                    const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
+                    return (
+                      <button
+                        key={page.id}
+                        type="button"
+                        onClick={() => {
+                          const textarea = mentionState.textarea;
+                          const val = textarea.value;
+                          const before = val.substring(0, mentionState.cursorPosition - 1 - mentionState.searchInput.length);
+                          const after = val.substring(mentionState.cursorPosition);
+                          const linkText = `[@${page.title}](/page/${page.id}) `;
+                          const newValue = before + linkText + after;
+                          
+                          textarea.value = newValue;
+                          handleNotesChange(newValue);
+                          setMentionState(null);
+                          
+                          setTimeout(() => {
+                            textarea.focus();
+                            const nextCursor = before.length + linkText.length;
+                            textarea.setSelectionRange(nextCursor, nextCursor);
+                          }, 50);
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-purple-500/10 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
+                      >
+                        <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
+                        <span className="truncate text-xs font-bold">{page.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div 
+          onContextMenu={onContextMenu} 
+          onClick={(e) => e.stopPropagation()} 
+          className="flex flex-col text-left py-1.5 px-2 bg-[#161616] rounded border border-[#1a1a1a] shadow-inner mb-2 select-text"
+        >
+          <div className="flex items-center gap-1.5 mb-1 select-none">
+            <StickyNote size={11} className="text-purple-400 shrink-0" />
+            <span className="font-black text-gray-500 uppercase tracking-wider text-[9px]">
+              {task.name} <span className="text-[8px] font-medium text-gray-600 lowercase italic">({isSync ? 'sync' : 'separate'})</span>
+            </span>
+          </div>
+          <div className={`text-gray-400 leading-tight text-[11.5px] px-0.5 line-clamp-3 select-text break-words w-full`}>
+            {parseNotesWithLinks(notesContent, props.allPages || [])}
+          </div>
+        </div>
+      );
+    }
   }
 
   if (task.type !== 'habit') return null;
@@ -2469,6 +2741,41 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
                   onWheel={(e) => e.currentTarget.blur()}
                 />
               </div>
+            </div>
+          )}
+
+          {task.type === 'notes' && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Note Property Mode</span>
+                <select
+                  className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                  value={task.notesMode || 'separate'}
+                  onChange={(e) => onUpdate(task.id, { notesMode: e.target.value })}
+                >
+                  <option value="separate">Separate (Unique Note per Day)</option>
+                  <option value="sync">Sync (Same Note synced everyday)</option>
+                </select>
+                <span className="text-[9px] text-gray-500 block leading-normal">
+                  {task.notesMode === 'sync' 
+                    ? "Synced mode allows editing this note on any day's Side Peek or right here in this settings panel." 
+                    : "Separate mode gives you a fresh unique note box on each day. (Separate notes can only be edited inside the Side Peek view)"}
+                </span>
+              </div>
+
+              {task.notesMode === 'sync' && (
+                <div className="flex flex-col gap-1.5 border-t border-[#2d2d2d]/50 pt-3">
+                  <span className="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1.5">
+                    <StickyNote size={12} /> Edit Synced Note Text (Global Setting)
+                  </span>
+                  <textarea
+                    className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg p-3 text-gray-300 placeholder:text-gray-800 outline-none focus:border-purple-500/50 transition-all min-h-[120px] leading-relaxed text-xs resize-y"
+                    placeholder="Click and type your synced note message..."
+                    value={task.syncedNoteText || ''}
+                    onChange={(e) => onUpdate(task.id, { syncedNoteText: e.target.value })}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

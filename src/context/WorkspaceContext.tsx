@@ -66,13 +66,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       isSettingsOpen,
       setSettingsOpen
     }}>
-      {/* We uniquely inject font-size classes directly onto children wrapper */}
-      <div className={`h-full w-full ${
-        settings.fontSize === 'small' ? 'text-sm' : 
-        settings.fontSize === 'large' ? 'text-lg' : 'text-base'
-      }`}>
-        {children}
-      </div>
+      {children}
     </WorkspaceContext.Provider>
   );
 }

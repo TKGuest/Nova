@@ -80,6 +80,8 @@ export interface HabitStats {
   lastActiveDate?: string;
   streakFrozen?: boolean;
   streakTargetTasks?: number;
+  streakInsuranceCost?: number;
+  streakInsuranceMax?: number;
 }
 
 export interface InventoryItem {
