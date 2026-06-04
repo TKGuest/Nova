@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 // @ts-ignore
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
@@ -18,15 +18,16 @@ import TaskItem from '@tiptap/extension-task-item';
 import TextAlign from '@tiptap/extension-text-align';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import Link from '@tiptap/extension-link';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { WordToolbar } from './WordToolbar';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import suggestion from './suggestion';
 import SlashCommand from './SlashCommand';
 import ToggleList, { ToggleHeader, ToggleContent } from './ToggleExtension';
-import { Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code, AlignLeft, AlignCenter, AlignRight, FileText, Calendar as CalendarIcon, X } from 'lucide-react';
 
 interface WordEditorProps {
   pageId: string;
@@ -35,6 +36,13 @@ interface WordEditorProps {
 
 export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
   const { user } = useAuth();
+  const [allPages, setAllPages] = useState<any[]>([]);
+  const [editorMentionState, setEditorMentionState] = useState<{
+    isOpen: boolean;
+    textBeforeMention: string;
+    searchInput: string;
+    range: { from: number; to: number };
+  } | null>(null);
 
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -64,9 +72,35 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
       ToggleContent,
       Subscript,
       Superscript,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-purple-400 hover:underline hover:text-purple-300 font-bold bg-purple-500/10 px-1 py-0.2 rounded border border-purple-500/20 cursor-pointer',
+        },
+      }),
     ],
     content: '',
     editable: true,
+    onSelectionUpdate: ({ editor }) => {
+      const { state } = editor;
+      const { selection } = state;
+      const { $from } = selection;
+      const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 50), $from.parentOffset);
+      const match = textBefore.match(/@([a-zA-Z0-9_\s-]*)$/);
+      if (match) {
+        const queryText = match[1];
+        const from = $from.pos - queryText.length - 1;
+        const to = $from.pos;
+        setEditorMentionState({
+          isOpen: true,
+          textBeforeMention: textBefore.substring(0, textBefore.length - match[0].length),
+          searchInput: queryText,
+          range: { from, to }
+        });
+      } else {
+        setEditorMentionState(null);
+      }
+    },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       if (!user || !pageId) return;
@@ -85,6 +119,37 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
       }, 300); // 300ms debounce as requested
     },
   });
+
+  // Subscribe to all pages so we can suggest them
+  useEffect(() => {
+    if (!user) return;
+    const pagesRef = collection(db, 'users', user.uid, 'pages');
+    const unsub = onSnapshot(pagesRef, (snapshot) => {
+      setAllPages(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+    return () => unsub();
+  }, [user]);
+
+  // Handle direct page redirection on link clicking (crucial for editable mode support)
+  useEffect(() => {
+    const handleEditorLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+      if (anchor) {
+        const href = anchor.getAttribute('href');
+        if (href && href.startsWith('/page/')) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.location.href = href;
+        }
+      }
+    };
+
+    document.addEventListener('click', handleEditorLinkClick, true);
+    return () => {
+      document.removeEventListener('click', handleEditorLinkClick, true);
+    };
+  }, []);
 
   // Load content (Optimistic & Ignore sync-back while typing)
   useEffect(() => {
@@ -110,9 +175,78 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
   if (!editor) return null;
 
   return (
-    <div className="flex flex-col bg-[#1e1e1e] tiptap-editor">
+    <div className="flex flex-col bg-[#1e1e1e] tiptap-editor relative">
       <WordToolbar editor={editor} />
       
+      {editorMentionState && editorMentionState.isOpen && (
+        <div 
+          className="absolute z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 top-14 left-6 flex flex-col gap-2 text-left"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <div className="flex items-center gap-1.5 px-1 py-0.5 border-b border-[#2d2d30] pb-1.5 justify-between">
+            <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Link to Page</span>
+            <button 
+              type="button"
+              onClick={() => setEditorMentionState(null)}
+              className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-gray-300"
+            >
+              <X size={10} />
+            </button>
+          </div>
+          
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search pages..."
+              value={editorMentionState.searchInput}
+              onChange={(e) => {
+                setEditorMentionState({
+                  ...editorMentionState,
+                  searchInput: e.target.value
+                });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setEditorMentionState(null);
+              }}
+              autoFocus
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500"
+            />
+          </div>
+
+          <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">
+            {(allPages || [])
+              .filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(editorMentionState.searchInput.toLowerCase()))
+              .map((page: any) => {
+                const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
+                return (
+                  <button
+                    key={page.id}
+                    type="button"
+                    onClick={() => {
+                      const { from } = editorMentionState.range;
+                      const currentTo = editor.state.selection.to;
+                      editor.chain().focus()
+                        .insertContentAt({ from, to: currentTo }, `<a href="/page/${page.id}">📄 @${page.title}</a> `)
+                        .run();
+                      setEditorMentionState(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-500/15 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
+                  >
+                    <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
+                    <span className="truncate text-[11.5px] font-semibold">{page.title}</span>
+                  </button>
+                );
+              })}
+            {(allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(editorMentionState.searchInput.toLowerCase())).length === 0 && (
+              <div className="px-2 py-4 text-center text-[10px] text-gray-600">No pages found</div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className={`flex-1 ${isPeek ? 'overflow-y-auto' : ''} px-6 md:px-20 py-10 overscroll-behavior-y-contain touch-action-pan-y`}>
         <SafeBubbleMenu editor={editor} tippyOptions={{ duration: 100 }} className="flex bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg shadow-xl overflow-hidden p-1 gap-1">
           <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-[#3a3a3a] ${editor.isActive('bold') ? 'text-blue-400 bg-[#3a3a3a]' : 'text-gray-300'}`}><Bold size={14}/></button>

@@ -358,7 +358,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             name: 'Streak Insurance',
             description: 'Prevents your streak multiplier from resetting for 1 missed day.',
             cost: 500,
-            type: 'instant'
+            type: 'instant',
+            maxLimit: 3
           },
           {
             name: '10 Min Focus Timer',
@@ -1131,8 +1132,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const handleBuyItem = async (item: ShopItem) => {
     if (!user || !gamificationStats) return;
     const isInsurance = item.name.toLowerCase().includes('streak insurance');
-    const actualCost = isInsurance ? (gamificationStats.streakInsuranceCost ?? 500) : item.cost;
-    const maxLimit = isInsurance ? (gamificationStats.streakInsuranceMax ?? 1) : 9999;
+    const actualCost = item.cost;
+    const maxLimit = isInsurance ? (item.maxLimit ?? 3) : 9999;
 
     if (isInsurance) {
       const existingInsurance = inventory.find(i => i.name.toLowerCase().includes('streak insurance'));
@@ -1417,7 +1418,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                   </div>
                   <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3 md:col-span-2">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Gamification Rules</span>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <SettingsNumberInput label="Point Decay" description="Points lost per missed day." value={gamificationStats?.decayValue ?? 5} onCommit={async (value) => {
                         if (!user) return;
                         await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { decayValue: value });
@@ -1433,24 +1434,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         onCommit={async (value) => {
                           if (!user) return;
                           await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakTargetTasks: value });
-                        }} 
-                      />
-                      <SettingsNumberInput 
-                        label="Streak Insurance Cost" 
-                        description="Price of insurance in shop." 
-                        value={gamificationStats?.streakInsuranceCost ?? 500} 
-                        onCommit={async (value) => {
-                          if (!user) return;
-                          await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakInsuranceCost: value });
-                        }} 
-                      />
-                      <SettingsNumberInput 
-                        label="Streak Insurance Max" 
-                        description="Maximum inventory cap." 
-                        value={gamificationStats?.streakInsuranceMax ?? 1} 
-                        onCommit={async (value) => {
-                          if (!user) return;
-                          await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakInsuranceMax: value });
                         }} 
                       />
                     </div>
@@ -2117,7 +2100,8 @@ function SortableMasterItem(props: any) {
   if (task.type === 'toggle_list') {
     const children = (allTasks || []).filter((t: any) => t.parentId === task.id && (t.type === 'habit' || t.type === 'notes'));
     const recordId = id.split('::')[0];
-    const completedChildren = children.filter((child: any) => !!recordData?.[child.id]).length;
+    const completionChildren = children.filter((child: any) => child.type === 'habit');
+    const completedChildren = completionChildren.filter((child: any) => !!recordData?.[child.id]).length;
 
     // Scale the toggle header label proportionally with the user's text size setting
     const labelSizeClass = textSizeClass.includes('text-[18px]')
@@ -2161,9 +2145,11 @@ function SortableMasterItem(props: any) {
               {task.name}
             </span>
           )}
-          <span className="text-[9px] font-black tracking-wider shrink-0" style={{ color: labelColor }}>
-            {completedChildren}/{children.length}
-          </span>
+          {completionChildren.length > 0 && (
+            <span className="text-[9px] font-black tracking-wider shrink-0" style={{ color: labelColor }}>
+              {completedChildren}/{completionChildren.length}
+            </span>
+          )}
         </button>
 
         {isExpanded && children.length > 0 && (
@@ -2312,51 +2298,88 @@ function SortableMasterItem(props: any) {
               placeholder="Log note content... Type @ to mention/link another page..."
               value={notesContent}
               onChange={handleTextareaChange}
-              onBlur={() => {
+              onBlur={(e) => {
+                if (e.relatedTarget && (e.relatedTarget as HTMLElement).closest('.mention-dropdown-container')) {
+                  return;
+                }
                 setTimeout(() => setMentionState(null), 250);
               }}
             />
 
             {mentionState && mentionState.isOpen && (
               <div 
-                className="absolute z-[999] bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg shadow-2xl p-1 w-64 max-h-48 overflow-y-auto mt-1 top-full left-5 flex flex-col gap-1 text-left"
-                onMouseDown={(e) => e.preventDefault()}
+                className="mention-dropdown-container absolute z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 top-full left-5 flex flex-col gap-2 text-left"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
               >
-                <div className="px-2 py-1 text-[9px] font-black uppercase text-gray-500 tracking-wider border-b border-[#2d2d2d] mb-1 flex items-center justify-between">
-                  <span>Link to Page</span>
+                <div className="flex items-center gap-1.5 px-1 py-0.5 border-b border-[#2d2d30] pb-1.5 justify-between">
+                  <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Link to Page</span>
+                  <button 
+                    type="button"
+                    onClick={() => setMentionState(null)}
+                    className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-gray-300"
+                  >
+                    <X size={10} />
+                  </button>
                 </div>
-                <div className="overflow-y-auto max-h-32 space-y-0.5 custom-scrollbar p-0.5">
-                  {(props.allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase())).map((page: any) => {
-                    const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
-                    return (
-                      <button
-                        key={page.id}
-                        type="button"
-                        onClick={() => {
-                          const textarea = mentionState.textarea;
-                          const val = textarea.value;
-                          const before = val.substring(0, mentionState.cursorPosition - 1 - mentionState.searchInput.length);
-                          const after = val.substring(mentionState.cursorPosition);
-                          const linkText = `[@${page.title}](/page/${page.id}) `;
-                          const newValue = before + linkText + after;
-                          
-                          textarea.value = newValue;
-                          handleNotesChange(newValue);
-                          setMentionState(null);
-                          
-                          setTimeout(() => {
-                            textarea.focus();
-                            const nextCursor = before.length + linkText.length;
-                            textarea.setSelectionRange(nextCursor, nextCursor);
-                          }, 50);
-                        }}
-                        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-purple-500/10 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
-                      >
-                        <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
-                        <span className="truncate text-xs font-bold">{page.title}</span>
-                      </button>
-                    );
-                  })}
+                
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search pages..."
+                    value={mentionState.searchInput}
+                    onChange={(e) => {
+                      setMentionState({
+                        ...mentionState,
+                        searchInput: e.target.value
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setMentionState(null);
+                    }}
+                    autoFocus
+                    className="w-full bg-[#111] border border-[#2d2d2d] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">
+                  {(props.allPages || [])
+                    .filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase()))
+                    .map((page: any) => {
+                      const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
+                      return (
+                        <button
+                          key={page.id}
+                          type="button"
+                          onClick={() => {
+                            const textarea = mentionState.textarea;
+                            const val = textarea.value;
+                            const before = val.substring(0, mentionState.cursorPosition - 1);
+                            const after = val.substring(mentionState.cursorPosition);
+                            const linkText = `[@${page.title}](/page/${page.id}) `;
+                            const newValue = before + linkText + after;
+                            
+                            textarea.value = newValue;
+                            handleNotesChange(newValue);
+                            setMentionState(null);
+                            
+                            setTimeout(() => {
+                              textarea.focus();
+                              const nextCursor = before.length + linkText.length;
+                              textarea.setSelectionRange(nextCursor, nextCursor);
+                            }, 50);
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-500/15 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
+                        >
+                          <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
+                          <span className="truncate text-[11.5px] font-semibold">{page.title}</span>
+                        </button>
+                      );
+                    })}
+                  {(props.allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase())).length === 0 && (
+                    <div className="px-2 py-4 text-center text-[10px] text-gray-600">No pages found</div>
+                  )}
                 </div>
               </div>
             )}
@@ -2853,6 +2876,7 @@ function ShopItemFormModal({
   const [type, setType] = useState<ShopItem['type']>(initialItem?.type || 'buff');
   const [durationValue, setDurationValue] = useState<number>(initialItem?.durationValue || initialItem?.durationHours || 24);
   const [durationUnit, setDurationUnit] = useState<'minutes' | 'hours'>(initialItem?.durationUnit || 'hours');
+  const [maxLimit, setMaxLimit] = useState<number>(initialItem?.maxLimit || 3);
 
   useEffect(() => {
     if (initialItem) {
@@ -2862,6 +2886,7 @@ function ShopItemFormModal({
       setType(initialItem.type);
       setDurationValue(initialItem.durationValue || initialItem.durationHours || 24);
       setDurationUnit(initialItem.durationUnit || 'hours');
+      setMaxLimit(initialItem.maxLimit || 3);
     } else {
       setName('');
       setDescription('');
@@ -2869,6 +2894,7 @@ function ShopItemFormModal({
       setType('buff');
       setDurationValue(24);
       setDurationUnit('hours');
+      setMaxLimit(3);
     }
   }, [initialItem, isOpen]);
 
@@ -2925,6 +2951,18 @@ function ShopItemFormModal({
           </div>
         </div>
 
+        {name.toLowerCase().includes('streak insurance') && (
+          <div>
+            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Maximum Inventory Cap</label>
+            <input 
+              type="number" 
+              value={maxLimit} 
+              onChange={(e) => setMaxLimit(Math.max(1, parseInt(e.target.value) || 1))} 
+              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50" 
+            />
+          </div>
+        )}
+
         {(type === 'buff' || type === 'timer') && (
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -2955,12 +2993,14 @@ function ShopItemFormModal({
 
         <div className="flex justify-end gap-2 pt-4 border-t border-[#222] mt-4">
           <button 
+            type="button"
             onClick={onClose} 
             className="px-4 py-2 bg-[#222] text-gray-400 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
           >
             Cancel
           </button>
           <button 
+            type="button"
             onClick={() => {
               if (!name.trim()) return;
               const calculatedHours = durationUnit === 'minutes' ? durationValue / 60 : durationValue;
@@ -2971,7 +3011,8 @@ function ShopItemFormModal({
                 type, 
                 durationHours: calculatedHours,
                 durationValue,
-                durationUnit
+                durationUnit,
+                maxLimit: name.toLowerCase().includes('streak insurance') ? maxLimit : undefined
               });
             }} 
             className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"

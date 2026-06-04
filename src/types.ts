@@ -105,6 +105,7 @@ export interface ShopItem {
   durationHours?: number;
   durationValue?: number;
   durationUnit?: 'minutes' | 'hours';
+  maxLimit?: number;
 }
 
 export interface SubTask {
