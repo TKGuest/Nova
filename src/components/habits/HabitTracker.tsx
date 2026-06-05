@@ -2027,6 +2027,46 @@ function DatePickerModal({ isOpen, onClose, onSelect, initialDate }: any) {
   );
 }
 
+// Mirror helper to measure coordinates of cursor inside a textarea element
+const getTextareaCaretAddress = (textarea: HTMLTextAreaElement, position: number) => {
+  try {
+    const style = window.getComputedStyle(textarea);
+    const div = document.createElement('div');
+    div.style.position = 'absolute';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.wordWrap = 'break-word';
+    div.style.width = textarea.clientWidth + 'px';
+    div.style.font = style.font;
+    div.style.fontFamily = style.fontFamily;
+    div.style.fontSize = style.fontSize;
+    div.style.lineHeight = style.lineHeight;
+    div.style.padding = style.padding;
+    div.style.border = style.border;
+    div.style.boxSizing = style.boxSizing;
+    
+    div.textContent = textarea.value.slice(0, position);
+    
+    const span = document.createElement('span');
+    span.textContent = '@';
+    div.appendChild(span);
+    
+    document.body.appendChild(div);
+    const textareaRect = textarea.getBoundingClientRect();
+    const top = textareaRect.top + span.offsetTop - textarea.scrollTop;
+    const left = textareaRect.left + span.offsetLeft - textarea.scrollLeft;
+    document.body.removeChild(div);
+    
+    return { top, left };
+  } catch {
+    const textareaRect = textarea.getBoundingClientRect();
+    return {
+      top: textareaRect.top + 20,
+      left: textareaRect.left + 20
+    };
+  }
+};
+
 function SortableMasterItem(props: any) {
   const { 
     id, 
@@ -2057,7 +2097,22 @@ function SortableMasterItem(props: any) {
     searchInput: string;
     cursorPosition: number;
     textarea: HTMLTextAreaElement;
+    coords?: { top: number; left: number };
   } | null>(null);
+
+  // Close mention dropdown when clicked elsewhere
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest('.mention-dropdown-container')) {
+        return;
+      }
+      setMentionState(null);
+    };
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+    };
+  }, []);
   
   // Persist expanded state in local storage keyed by task.id
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -2247,21 +2302,36 @@ function SortableMasterItem(props: any) {
     };
 
     const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const val = e.target.value;
-      const cursor = e.target.selectionStart;
+      const textarea = e.target;
+      const val = textarea.value;
+      const cursor = textarea.selectionStart;
       const textBefore = val.slice(0, cursor);
       const match = textBefore.match(/@([a-zA-Z0-9_\s-]*)$/);
+      
       if (match) {
-        setMentionState({
-          isOpen: true,
-          textBeforeMention: textBefore.substring(0, textBefore.length - match[0].length),
-          searchInput: match[1],
-          cursorPosition: cursor,
-          textarea: e.target
-        });
-      } else {
-        setMentionState(null);
+        const queryText = match[1];
+        const hasSpaceImmediately = queryText.startsWith(' ');
+        
+        // Find if page suggestions exist for this text
+        const matches = (props.allPages || []).filter(
+          (p: any) => !p.deletedAt && p.title.toLowerCase().includes(queryText.toLowerCase())
+        );
+
+        if (!hasSpaceImmediately && matches.length > 0) {
+          const coords = getTextareaCaretAddress(textarea, cursor);
+          setMentionState({
+            isOpen: true,
+            textBeforeMention: textBefore.substring(0, textBefore.length - match[0].length),
+            searchInput: queryText,
+            cursorPosition: cursor,
+            textarea: textarea,
+            coords
+          });
+          handleNotesChange(val);
+          return;
+        }
       }
+      setMentionState(null);
       handleNotesChange(val);
     };
 
@@ -2306,83 +2376,73 @@ function SortableMasterItem(props: any) {
               }}
             />
 
-            {mentionState && mentionState.isOpen && (
-              <div 
-                className="mention-dropdown-container absolute z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 top-full left-5 flex flex-col gap-2 text-left"
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-              >
-                <div className="flex items-center gap-1.5 px-1 py-0.5 border-b border-[#2d2d30] pb-1.5 justify-between">
-                  <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Link to Page</span>
-                  <button 
-                    type="button"
-                    onClick={() => setMentionState(null)}
-                    className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-gray-300"
-                  >
-                    <X size={10} />
-                  </button>
-                </div>
-                
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search pages..."
-                    value={mentionState.searchInput}
-                    onChange={(e) => {
-                      setMentionState({
-                        ...mentionState,
-                        searchInput: e.target.value
-                      });
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') setMentionState(null);
-                    }}
-                    autoFocus
-                    className="w-full bg-[#111] border border-[#2d2d2d] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
+            {mentionState && mentionState.isOpen && mentionState.coords && (() => {
+              const { top, left } = mentionState.coords;
+              return (
+                <div 
+                  style={{
+                    position: 'fixed',
+                    top: `${top}px`,
+                    left: `${left}px`,
+                    transform: 'translate(12px, -100%)',
+                  }}
+                  className="mention-dropdown-container z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 flex flex-col gap-2 text-left"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 px-1 py-0.5 border-b border-[#2d2d30] pb-1.5 justify-between">
+                    <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Link to Page</span>
+                    <button 
+                      type="button"
+                      onClick={() => setMentionState(null)}
+                      className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-gray-300"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
 
-                <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">
-                  {(props.allPages || [])
-                    .filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase()))
-                    .map((page: any) => {
-                      const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
-                      return (
-                        <button
-                          key={page.id}
-                          type="button"
-                          onClick={() => {
-                            const textarea = mentionState.textarea;
-                            const val = textarea.value;
-                            const before = val.substring(0, mentionState.cursorPosition - 1);
-                            const after = val.substring(mentionState.cursorPosition);
-                            const linkText = `[@${page.title}](/page/${page.id}) `;
-                            const newValue = before + linkText + after;
-                            
-                            textarea.value = newValue;
-                            handleNotesChange(newValue);
-                            setMentionState(null);
-                            
-                            setTimeout(() => {
-                              textarea.focus();
-                              const nextCursor = before.length + linkText.length;
-                              textarea.setSelectionRange(nextCursor, nextCursor);
-                            }, 50);
-                          }}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-500/15 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
-                        >
-                          <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
-                          <span className="truncate text-[11.5px] font-semibold">{page.title}</span>
-                        </button>
-                      );
-                    })}
-                  {(props.allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase())).length === 0 && (
-                    <div className="px-2 py-4 text-center text-[10px] text-gray-600">No pages found</div>
-                  )}
+                  <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">
+                    {(props.allPages || [])
+                      .filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase()))
+                      .map((page: any) => {
+                        const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
+                        return (
+                          <button
+                            key={page.id}
+                            type="button"
+                            onClick={() => {
+                              const textarea = mentionState.textarea;
+                              const val = textarea.value;
+                              const before = val.substring(0, mentionState.cursorPosition - 1);
+                              const after = val.substring(mentionState.cursorPosition);
+                              const linkText = `[@${page.title}](/page/${page.id}) `;
+                              const newValue = before + linkText + after;
+                              
+                              textarea.value = newValue;
+                              handleNotesChange(newValue);
+                              setMentionState(null);
+                              
+                              setTimeout(() => {
+                                textarea.focus();
+                                const nextCursor = before.length + linkText.length;
+                                textarea.setSelectionRange(nextCursor, nextCursor);
+                              }, 50);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-500/15 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
+                          >
+                            <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
+                            <span className="truncate text-[11.5px] font-semibold">{page.title}</span>
+                          </button>
+                        );
+                      })}
+                    {(props.allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(mentionState.searchInput.toLowerCase())).length === 0 && (
+                      <div className="px-2 py-4 text-center text-[10px] text-gray-600">No pages found</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       );
@@ -2925,7 +2985,7 @@ function ShopItemFormModal({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={name.toLowerCase().includes('streak insurance') ? "grid grid-cols-1" : "grid grid-cols-2 gap-4"}>
           <div>
             <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Cost (Points)</label>
             <input 
@@ -2936,19 +2996,21 @@ function ShopItemFormModal({
             />
           </div>
 
-          <div>
-            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Item Type</label>
-            <select 
-              value={type} 
-              onChange={(e) => setType(e.target.value as ShopItem['type'])} 
-              className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
-            >
-              <option value="buff">Buff (Temporal)</option>
-              <option value="timer">Timer (Focus)</option>
-              <option value="note">Note (Task Attachment)</option>
-              <option value="instant">Instant (Consumable)</option>
-            </select>
-          </div>
+          {!name.toLowerCase().includes('streak insurance') && (
+            <div>
+              <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider block mb-1">Item Type</label>
+              <select 
+                value={type} 
+                onChange={(e) => setType(e.target.value as ShopItem['type'])} 
+                className="w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
+              >
+                <option value="buff">Buff (Temporal)</option>
+                <option value="timer">Timer (Focus)</option>
+                <option value="note">Note (Task Attachment)</option>
+                <option value="instant">Instant (Consumable)</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {name.toLowerCase().includes('streak insurance') && (
@@ -3004,15 +3066,16 @@ function ShopItemFormModal({
             onClick={() => {
               if (!name.trim()) return;
               const calculatedHours = durationUnit === 'minutes' ? durationValue / 60 : durationValue;
+              const isInsurance = name.toLowerCase().includes('streak insurance');
               onSubmit({ 
                 name, 
                 description, 
                 cost, 
-                type, 
+                type: isInsurance ? 'instant' : type, 
                 durationHours: calculatedHours,
                 durationValue,
                 durationUnit,
-                maxLimit: name.toLowerCase().includes('streak insurance') ? maxLimit : undefined
+                maxLimit: isInsurance ? maxLimit : undefined
               });
             }} 
             className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"

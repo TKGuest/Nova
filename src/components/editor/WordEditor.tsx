@@ -81,26 +81,6 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
     ],
     content: '',
     editable: true,
-    onSelectionUpdate: ({ editor }) => {
-      const { state } = editor;
-      const { selection } = state;
-      const { $from } = selection;
-      const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 50), $from.parentOffset);
-      const match = textBefore.match(/@([a-zA-Z0-9_\s-]*)$/);
-      if (match) {
-        const queryText = match[1];
-        const from = $from.pos - queryText.length - 1;
-        const to = $from.pos;
-        setEditorMentionState({
-          isOpen: true,
-          textBeforeMention: textBefore.substring(0, textBefore.length - match[0].length),
-          searchInput: queryText,
-          range: { from, to }
-        });
-      } else {
-        setEditorMentionState(null);
-      }
-    },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       if (!user || !pageId) return;
@@ -129,6 +109,72 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
     });
     return () => unsub();
   }, [user]);
+
+  // Handle Mentions dynamically based on latest allPages and selection states
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleSelectionUpdate = () => {
+      const { state } = editor;
+      const { selection } = state;
+      const { $from } = selection;
+      const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 50), $from.parentOffset);
+      const match = textBefore.match(/@([a-zA-Z0-9_\s-]*)$/);
+      
+      if (match) {
+        const queryText = match[1];
+        const hasSpaceImmediately = queryText.startsWith(' ');
+        
+        // Find if any match exists for this query
+        const matches = (allPages || []).filter(
+          (p: any) => !p.deletedAt && p.title.toLowerCase().includes(queryText.toLowerCase())
+        );
+
+        if (!hasSpaceImmediately && matches.length > 0) {
+          const from = $from.pos - queryText.length - 1;
+          const to = $from.pos;
+          setEditorMentionState({
+            isOpen: true,
+            textBeforeMention: textBefore.substring(0, textBefore.length - match[0].length),
+            searchInput: queryText,
+            range: { from, to }
+          });
+          return;
+        }
+      }
+      setEditorMentionState(null);
+    };
+
+    editor.on('selectionUpdate', handleSelectionUpdate);
+    return () => {
+      editor.off('selectionUpdate', handleSelectionUpdate);
+    };
+  }, [editor, allPages]);
+
+  // Dismiss mention dropdown when user clicks elsewhere
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest('.editor-mention-dropdown')) {
+        return;
+      }
+      setEditorMentionState(null);
+    };
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+    };
+  }, []);
+
+  // Helper to obtain current absolute editor viewport coordinates
+  const getCursorCoords = () => {
+    if (!editor) return null;
+    try {
+      const { selection } = editor.state;
+      return editor.view.coordsAtPos(selection.from);
+    } catch {
+      return null;
+    }
+  };
 
   // Handle direct page redirection on link clicking (crucial for editable mode support)
   useEffect(() => {
@@ -178,74 +224,65 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
     <div className="flex flex-col bg-[#1e1e1e] tiptap-editor relative">
       <WordToolbar editor={editor} />
       
-      {editorMentionState && editorMentionState.isOpen && (
-        <div 
-          className="absolute z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 top-14 left-6 flex flex-col gap-2 text-left"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-          <div className="flex items-center gap-1.5 px-1 py-0.5 border-b border-[#2d2d30] pb-1.5 justify-between">
-            <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Link to Page</span>
-            <button 
-              type="button"
-              onClick={() => setEditorMentionState(null)}
-              className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-gray-300"
-            >
-              <X size={10} />
-            </button>
-          </div>
-          
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search pages..."
-              value={editorMentionState.searchInput}
-              onChange={(e) => {
-                setEditorMentionState({
-                  ...editorMentionState,
-                  searchInput: e.target.value
-                });
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setEditorMentionState(null);
-              }}
-              autoFocus
-              className="w-full bg-[#111] border border-[#2d2d2d] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500"
-            />
-          </div>
+      {editorMentionState && editorMentionState.isOpen && (() => {
+        const coords = getCursorCoords();
+        if (!coords) return null;
+        return (
+          <div 
+            style={{
+              position: 'fixed',
+              left: `${coords.left}px`,
+              top: `${coords.top}px`,
+              transform: 'translate(12px, -100%)',
+            }}
+            className="editor-mention-dropdown z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 flex flex-col gap-2 text-left"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <div className="flex items-center gap-1.5 px-1 py-0.5 border-b border-[#2d2d30] pb-1.5 justify-between">
+              <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Link to Page</span>
+              <button 
+                type="button"
+                onClick={() => setEditorMentionState(null)}
+                className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-gray-300"
+              >
+                <X size={10} />
+              </button>
+            </div>
 
-          <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">
-            {(allPages || [])
-              .filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(editorMentionState.searchInput.toLowerCase()))
-              .map((page: any) => {
-                const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
-                return (
-                  <button
-                    key={page.id}
-                    type="button"
-                    onClick={() => {
-                      const { from } = editorMentionState.range;
-                      const currentTo = editor.state.selection.to;
-                      editor.chain().focus()
-                        .insertContentAt({ from, to: currentTo }, `<a href="/page/${page.id}">📄 @${page.title}</a> `)
-                        .run();
-                      setEditorMentionState(null);
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-500/15 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
-                  >
-                    <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
-                    <span className="truncate text-[11.5px] font-semibold">{page.title}</span>
-                  </button>
-                );
-              })}
-            {(allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(editorMentionState.searchInput.toLowerCase())).length === 0 && (
-              <div className="px-2 py-4 text-center text-[10px] text-gray-600">No pages found</div>
-            )}
+            <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">
+              {(allPages || [])
+                .filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(editorMentionState.searchInput.toLowerCase()))
+                .map((page: any) => {
+                  const PageIcon = page.type === 'note' ? FileText : CalendarIcon;
+                  return (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onClick={() => {
+                        const { from } = editorMentionState.range;
+                        const currentTo = editor.state.selection.to;
+                        editor.chain().focus()
+                          .insertContentAt({ from, to: currentTo }, `<a href="/page/${page.id}">📄 @${page.title}</a> `)
+                          .run();
+                        setEditorMentionState(null);
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-500/15 rounded text-left text-gray-300 hover:text-white transition-colors cursor-pointer group"
+                    >
+                      <PageIcon size={12} className="text-gray-500 group-hover:text-purple-400 shrink-0" />
+                      <span className="truncate text-[11.5px] font-semibold">{page.title}</span>
+                    </button>
+                  );
+                })}
+              {(allPages || []).filter((p: any) => !p.deletedAt && p.title.toLowerCase().includes(editorMentionState.searchInput.toLowerCase())).length === 0 && (
+                <div className="px-2 py-4 text-center text-[10px] text-gray-600">No pages found</div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className={`flex-1 ${isPeek ? 'overflow-y-auto' : ''} px-6 md:px-20 py-10 overscroll-behavior-y-contain touch-action-pan-y`}>
         <SafeBubbleMenu editor={editor} tippyOptions={{ duration: 100 }} className="flex bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg shadow-xl overflow-hidden p-1 gap-1">
