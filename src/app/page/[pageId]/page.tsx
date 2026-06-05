@@ -63,9 +63,9 @@ export default function DynamicPage() {
           </h1>
           <div className="min-h-0">
             {pageMeta.type === 'note' ? (
-              <WordEditor pageId={pageId} />
+              <WordEditor key={pageId} pageId={pageId} />
             ) : (
-              <HabitTracker pageId={pageId} />
+              <HabitTracker key={pageId} pageId={pageId} />
             )}
           </div>
         </div>

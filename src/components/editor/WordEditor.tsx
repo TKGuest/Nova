@@ -123,6 +123,10 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
       
       if (match) {
         const queryText = match[1];
+        if (queryText.length > 0) {
+          setEditorMentionState(null);
+          return;
+        }
         const hasSpaceImmediately = queryText.startsWith(' ');
         
         // Find if any match exists for this query
@@ -237,7 +241,9 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
             }}
             className="editor-mention-dropdown z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 flex flex-col gap-2 text-left"
             onMouseDown={(e) => {
-              e.preventDefault();
+              if (!(e.target as HTMLElement).closest('.mention-search-input')) {
+                e.preventDefault();
+              }
               e.stopPropagation();
             }}
           >
@@ -250,6 +256,24 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
               >
                 <X size={10} />
               </button>
+            </div>
+
+            <div className="px-1">
+              <input
+                type="text"
+                placeholder="Search pages..."
+                className="mention-search-input w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors font-medium"
+                value={editorMentionState.searchInput}
+                onChange={(e) => {
+                  setEditorMentionState({
+                    ...editorMentionState,
+                    searchInput: e.target.value
+                  });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditorMentionState(null);
+                }}
+              />
             </div>
 
             <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">

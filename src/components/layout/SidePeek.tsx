@@ -133,10 +133,10 @@ export function SidePeek() {
                 </h1>
               )}
               {pageData.type === 'note' ? (
-                <WordEditor pageId={sidePeekPageId!} />
+                <WordEditor key={sidePeekPageId!} pageId={sidePeekPageId!} />
               ) : (
                 <div className={sidePeekRecordId ? 'mt-0' : 'mt-8'}>
-                  <HabitTracker pageId={sidePeekPageId!} isPeek={true} />
+                  <HabitTracker key={sidePeekPageId!} pageId={sidePeekPageId!} isPeek={true} />
                 </div>
               )}
            </>

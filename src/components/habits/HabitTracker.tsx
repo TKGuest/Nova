@@ -623,6 +623,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
   const toggleCompletion = async (recordId: string, taskId: string, current: boolean) => {
     if (!user) return;
+    const task = masterTasks.find(t => t.id === taskId);
+    if (task && task.rewardMode === 'subtasks_separately' && task.autoTickMode !== 'manual') {
+      return;
+    }
     const isCompleted = !current;
     
     const recordRef = doc(db, 'users', user.uid, 'pages', pageId, 'records', recordId);
@@ -1680,7 +1684,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list').map(task => (
                           <td key={task.id} className="p-2 text-center border-r border-[#1a1a1a]/50">
                             {task.type === 'habit' ? (
-                              <div className={getCheckboxScale()}><Checkbox checked={!!record.data?.[task.id]} onClick={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} /></div>
+                              <div className={getCheckboxScale()}>
+                                <Checkbox 
+                                  checked={!!record.data?.[task.id]} 
+                                  disabled={task.rewardMode === 'subtasks_separately' && task.autoTickMode !== 'manual'}
+                                  onClick={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
+                                />
+                              </div>
                             ) : task.type === 'counter' ? (
                               <span className={`font-black text-blue-500/80 uppercase ${getTextClasses()}`}>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
                             ) : task.type === 'task_counter' ? (
@@ -2310,6 +2320,11 @@ function SortableMasterItem(props: any) {
       
       if (match) {
         const queryText = match[1];
+        if (queryText.length > 0) {
+          setMentionState(null);
+          handleNotesChange(val);
+          return;
+        }
         const hasSpaceImmediately = queryText.startsWith(' ');
         
         // Find if page suggestions exist for this text
@@ -2388,6 +2403,9 @@ function SortableMasterItem(props: any) {
                   }}
                   className="mention-dropdown-container z-[999] bg-[#1c1c1e] border border-[#2d2d30] rounded-xl shadow-2xl p-2 w-64 flex flex-col gap-2 text-left"
                   onMouseDown={(e) => {
+                    if (!(e.target as HTMLElement).closest('.mention-search-input')) {
+                      e.preventDefault();
+                    }
                     e.stopPropagation();
                   }}
                 >
@@ -2400,6 +2418,24 @@ function SortableMasterItem(props: any) {
                     >
                       <X size={10} />
                     </button>
+                  </div>
+
+                  <div className="px-1">
+                    <input
+                      type="text"
+                      placeholder="Search pages..."
+                      className="mention-search-input w-full bg-[#111] border border-[#2d2d2d] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors font-medium opacity-90"
+                      value={mentionState.searchInput}
+                      onChange={(e) => {
+                        setMentionState({
+                          ...mentionState,
+                          searchInput: e.target.value
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setMentionState(null);
+                      }}
+                    />
                   </div>
 
                   <div className="overflow-y-auto max-h-36 space-y-0.5 custom-scrollbar p-0.5">
@@ -2477,6 +2513,8 @@ function SortableMasterItem(props: any) {
 
   const subCheckboxScale = isPeek ? 'scale-[0.85]' : 'scale-[0.8]';
 
+  const isMainTaskManualToggleDisabled = task.rewardMode === 'subtasks_separately' && task.autoTickMode !== 'manual';
+
   return (
     <div ref={isPeek ? setNodeRef : null} style={style} className="flex flex-col mb-1 group/item">
       <div onContextMenu={onContextMenu} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 px-1 py-0.5 rounded-md hover:bg-[#252526] transition-all min-h-[22px]">
@@ -2495,13 +2533,13 @@ function SortableMasterItem(props: any) {
         )}
 
         <div className={`${checkboxScale} origin-left shrink-0`} onClick={(e) => e.stopPropagation()}>
-          <Checkbox checked={completed} onClick={onToggle} />
+          <Checkbox checked={completed} disabled={isMainTaskManualToggleDisabled} onClick={onToggle} />
         </div>
         
         {isEditing ? (
           <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
         ) : (
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer" onClick={isMainTaskManualToggleDisabled ? undefined : onToggle}>
             <span className={`font-medium tracking-tight transition-all ${
               completed ? 'text-gray-700 line-through' : 'text-gray-400'
             } ${

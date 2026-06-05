@@ -283,15 +283,13 @@ export function GamificationDashboard({
       const nextSpentToday = spentToday.filter(i => i.id !== spendingItem.id);
       await updateDoc(spendingRef, { items: nextSpentToday });
 
-      // 4. Mark as reverted in history log!
-      const { getDocs, where } = await import('firebase/firestore');
+      // 4. Remove completely from history log!
+      const { getDocs, where, deleteDoc } = await import('firebase/firestore');
       const histRef = collection(db, 'users', user.uid, 'pages', pageId, 'purchase_log');
       const q = query(histRef, where('spendingItemId', '==', spendingItem.id));
       const qSnap = await getDocs(q);
       qSnap.forEach(async (dDoc) => {
-        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'purchase_log', dDoc.id), {
-          reverted: true
-        });
+        await deleteDoc(doc(db, 'users', user.uid, 'pages', pageId, 'purchase_log', dDoc.id));
       });
 
       showToast(`Reverted "${spendingItem.name}" and refunded ${spendingItem.cost} points!`, 'success');
