@@ -190,7 +190,7 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
         if (href && href.startsWith('/page/')) {
           e.preventDefault();
           e.stopPropagation();
-          window.location.href = href;
+          window.location.hash = href;
         }
       }
     };

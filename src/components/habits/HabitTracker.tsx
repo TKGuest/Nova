@@ -72,8 +72,9 @@ function parseNotesWithLinks(text: string, pages: PageModel[]): React.ReactNode 
           key={`page-lnk-${idx}`} 
           href={m.url} 
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
-            window.location.href = m.url;
+            window.location.hash = m.url;
           }}
           className="text-purple-400 hover:underline hover:text-purple-300 font-bold inline-flex items-center gap-0.5 bg-purple-500/10 px-1 py-0.2 rounded border border-purple-500/20"
         >
@@ -1725,7 +1726,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       )}
       <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
         {announcements.map(a => (
-          <div key={a.id} className={`px-4 py-3 rounded-lg border shadow-2xl text-[12px] font-black uppercase tracking-wider animate-fade-in ${a.delta < 0 ? 'bg-red-500/15 border-red-500/30 text-red-300' : a.delta > 0 ? 'bg-green-500/15 border-green-500/30 text-green-300' : 'bg-[#1a1a1a] border-[#2d2d2d] text-gray-300'}`}>
+          <div key={a.id} className={`px-4 py-3 rounded-lg border shadow-2xl text-[12px] font-black uppercase tracking-wider animate-fade-in ${(a.delta < 0 || a.text === 'Action not applicable' || a.text === 'Action not applicable') ? 'bg-red-500/15 border-red-500/30 text-red-300' : a.delta > 0 ? 'bg-green-500/15 border-green-500/30 text-green-300' : 'bg-[#1a1a1a] border-[#2d2d2d] text-gray-300'}`}>
             {a.text}
           </div>
         ))}
