@@ -289,7 +289,7 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
                         const { from } = editorMentionState.range;
                         const currentTo = editor.state.selection.to;
                         editor.chain().focus()
-                          .insertContentAt({ from, to: currentTo }, `<a href="/page/${page.id}">📄 @${page.title}</a> `)
+                          .insertContentAt({ from, to: currentTo }, `<a href="/page/${page.id}">@${page.title}</a> `)
                           .run();
                         setEditorMentionState(null);
                       }}

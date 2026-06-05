@@ -77,7 +77,7 @@ function parseNotesWithLinks(text: string, pages: PageModel[]): React.ReactNode 
           }}
           className="text-purple-400 hover:underline hover:text-purple-300 font-bold inline-flex items-center gap-0.5 bg-purple-500/10 px-1 py-0.2 rounded border border-purple-500/20"
         >
-          📄 @{m.title}
+          @{m.title}
         </a>
       );
     } else {
@@ -625,6 +625,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (!user) return;
     const task = masterTasks.find(t => t.id === taskId);
     if (task && task.rewardMode === 'subtasks_separately' && task.autoTickMode !== 'manual') {
+      showPointAnnouncement('Action not applicable', 0);
       return;
     }
     const isCompleted = !current;
@@ -1687,7 +1688,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                               <div className={getCheckboxScale()}>
                                 <Checkbox 
                                   checked={!!record.data?.[task.id]} 
-                                  disabled={task.rewardMode === 'subtasks_separately' && task.autoTickMode !== 'manual'}
                                   onClick={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                 />
                               </div>
@@ -2513,8 +2513,6 @@ function SortableMasterItem(props: any) {
 
   const subCheckboxScale = isPeek ? 'scale-[0.85]' : 'scale-[0.8]';
 
-  const isMainTaskManualToggleDisabled = task.rewardMode === 'subtasks_separately' && task.autoTickMode !== 'manual';
-
   return (
     <div ref={isPeek ? setNodeRef : null} style={style} className="flex flex-col mb-1 group/item">
       <div onContextMenu={onContextMenu} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 px-1 py-0.5 rounded-md hover:bg-[#252526] transition-all min-h-[22px]">
@@ -2533,13 +2531,13 @@ function SortableMasterItem(props: any) {
         )}
 
         <div className={`${checkboxScale} origin-left shrink-0`} onClick={(e) => e.stopPropagation()}>
-          <Checkbox checked={completed} disabled={isMainTaskManualToggleDisabled} onClick={onToggle} />
+          <Checkbox checked={completed} onClick={onToggle} />
         </div>
         
         {isEditing ? (
           <input ref={inputRef} className={`flex-1 bg-transparent font-medium text-blue-400 outline-none border-b border-blue-500/50 ${textSizeClass}`} value={tempName} onChange={(e) => setTempName(e.target.value)} onBlur={() => onRename(tempName)} onKeyDown={(e) => { if (e.key === 'Enter') onRename(tempName); if (e.key === 'Escape') onRename(task.name); }} />
         ) : (
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer" onClick={isMainTaskManualToggleDisabled ? undefined : onToggle}>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
             <span className={`font-medium tracking-tight transition-all ${
               completed ? 'text-gray-700 line-through' : 'text-gray-400'
             } ${

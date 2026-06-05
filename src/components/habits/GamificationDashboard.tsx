@@ -73,12 +73,30 @@ export function GamificationDashboard({
     const unsubHist = onSnapshot(q, (snapshot) => {
       const items: any[] = [];
       snapshot.forEach(docSnap => {
-        items.push({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        if (!data.reverted) {
+          items.push({ id: docSnap.id, ...data });
+        }
       });
       setPurchaseHistory(items);
     }, (err) => {
       console.warn("History sub failed:", err);
     });
+
+    // Clean up/Wipe any old reverted logs in Firestore
+    const wipeOldRevertedLogs = async () => {
+      try {
+        const { getDocs, where, deleteDoc } = await import('firebase/firestore');
+        const qReverted = query(histRef, where('reverted', '==', true));
+        const qSnap = await getDocs(qReverted);
+        qSnap.forEach(async (dDoc) => {
+          await deleteDoc(doc(db, 'users', user.uid, 'pages', pageId, 'purchase_log', dDoc.id));
+        });
+      } catch (err) {
+        console.warn("Wiping old reverted logs failed:", err);
+      }
+    };
+    wipeOldRevertedLogs();
 
     return () => {
       unsubStats();
