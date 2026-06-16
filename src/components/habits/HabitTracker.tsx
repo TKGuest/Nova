@@ -68,18 +68,19 @@ function parseNotesWithLinks(text: string, pages: PageModel[]): React.ReactNode 
     
     if (m.type === 'page') {
       elements.push(
-        <a 
+        <button 
           key={`page-lnk-${idx}`} 
-          href={`#${m.url}`} 
+          type="button" 
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             window.location.hash = m.url;
           }}
-          className="text-purple-400 hover:underline hover:text-purple-300 font-bold inline-flex items-center gap-0.5 bg-purple-500/10 px-1 py-0.2 rounded border border-purple-500/20"
+          className="text-purple-400 hover:text-purple-300 font-semibold inline-flex items-center gap-1 bg-purple-500/10 hover:bg-purple-500/20 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all font-sans text-[11px] align-middle cursor-pointer"
         >
-          @{m.title}
-        </a>
+          <StickyNote size={11} className="text-purple-400 shrink-0" />
+          <span>@{m.title}</span>
+        </button>
       );
     } else {
       elements.push(

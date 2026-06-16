@@ -75,7 +75,8 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: 'text-purple-400 hover:underline hover:text-purple-300 font-bold bg-purple-500/10 px-1 py-0.2 rounded border border-purple-500/20 cursor-pointer',
+          class: 'text-purple-400 hover:text-purple-300 font-semibold bg-purple-500/10 hover:bg-purple-500/20 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all font-sans text-[11px] align-middle no-underline cursor-pointer inline-flex items-center gap-1 select-none',
+          target: '_self',
         },
       }),
     ],
@@ -194,6 +195,7 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
           if (href.startsWith('/page/')) {
             e.preventDefault();
             e.stopPropagation();
+            anchor.setAttribute('target', '_self');
             window.location.hash = href;
           }
         }

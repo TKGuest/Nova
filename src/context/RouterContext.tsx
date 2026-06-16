@@ -49,6 +49,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
           if (href.startsWith('/page/')) {
             e.preventDefault();
             e.stopPropagation();
+            anchor.setAttribute('target', '_self');
             navigate(href);
           }
         }
