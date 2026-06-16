@@ -165,6 +165,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set());
   const [counterFormat, setCounterFormat] = useState<'fraction' | 'percent'>('fraction');
   const [textSize, setTextSize] = useState<TextSize>('small');
+  const [daysSorting, setDaysSorting] = useState<'chrono' | 'reverse'>('chrono');
   const [textTruncateMode, setTextTruncateMode] = useState<'wrap' | 'truncate'>('wrap');
   const [pageMeta, setPageMeta] = useState<PageModel | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -304,6 +305,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (savedFormat) setCounterFormat(savedFormat as 'fraction' | 'percent');
     const savedTruncate = localStorage.getItem(`habits_truncate_mode_${pageId}`);
     if (savedTruncate) setTextTruncateMode(savedTruncate as 'wrap' | 'truncate');
+    const savedSorting = localStorage.getItem(`habits_days_sorting_${pageId}`);
+    if (savedSorting) setDaysSorting(savedSorting as 'chrono' | 'reverse');
     setIsLoaded(true);
   }, [pageId]);
 
@@ -321,6 +324,11 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (!isLoaded) return;
     localStorage.setItem(`habits_truncate_mode_${pageId}`, textTruncateMode);
   }, [textTruncateMode, pageId, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    localStorage.setItem(`habits_days_sorting_${pageId}`, daysSorting);
+  }, [daysSorting, pageId, isLoaded]);
 
   useEffect(() => {
     if (!user || !pageId) return;
@@ -538,9 +546,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const today = startOfDay(new Date());
     records.forEach(r => {
       const d = parseISO(r.date);
-      const weekKey = format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const weekStartsOn = 1;
+      const weekKey = format(startOfWeek(d, { weekStartsOn }), 'yyyy-MM-dd');
       if (!groups[weekKey]) {
-        const start = startOfWeek(d, { weekStartsOn: 1 });
+        const start = startOfWeek(d, { weekStartsOn });
         groups[weekKey] = { label: `${format(start, 'MMM d')} \u2013 ${format(addDays(start, 6), 'MMM d yyyy')}`, items: [] };
       }
       groups[weekKey].items.push(r);
@@ -550,9 +559,23 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       const start = startOfWeek(today, { weekStartsOn: 1 });
       groups[currentWeekKey] = { label: `${format(start, 'MMM d')} \u2013 ${format(addDays(start, 6), 'MMM d yyyy')}`, items: [] };
     }
-    Object.values(groups).forEach(g => g.items.sort((a, b) => a.date.localeCompare(b.date)));
+    Object.values(groups).forEach(g => {
+      g.items.sort((a, b) => {
+        return daysSorting === 'chrono'
+          ? a.date.localeCompare(b.date)
+          : b.date.localeCompare(a.date);
+      });
+    });
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [records]);
+  }, [records, daysSorting]);
+
+  const sortedRecords = useMemo(() => {
+    return [...records].sort((a, b) => {
+      return daysSorting === 'chrono'
+        ? a.date.localeCompare(b.date)
+        : b.date.localeCompare(a.date);
+    });
+  }, [records, daysSorting]);
 
   const safeParse = (s: string | null | undefined) => {
     try { return s ? LexoRank.parse(s) : LexoRank.middle(); } catch { return LexoRank.middle(); }
@@ -1401,6 +1424,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <button onClick={() => setTextTruncateMode('truncate')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${textTruncateMode === 'truncate' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Truncate</button>
                     </div>
                   </div>
+                  <div className="space-y-3">
+                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Week Days Order</span>
+                    <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
+                      <button onClick={() => setDaysSorting('chrono')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${daysSorting === 'chrono' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Monday-Sunday</button>
+                      <button onClick={() => setDaysSorting('reverse')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${daysSorting === 'reverse' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Sunday, Sat, Fri...</button>
+                    </div>
+                  </div>
                   <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">All Habits Daily Bonus</span>
                     <div className="flex flex-col gap-1.5">
@@ -1478,11 +1508,19 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       recordId={record.id} 
                       coverImage={record.coverImage} 
                     />
-                    <div className="flex flex-col gap-1 border-b border-[#1a1a1a] pb-6 mb-2 text-left">
-                      <span className={`font-black uppercase tracking-[0.3em] ${getDateHeaderClasses()} ${isSameDay(dateObj, new Date()) ? 'text-blue-500' : 'text-gray-600'}`}>
-                        {isSameDay(dateObj, new Date()) ? '@Today' : isSameDay(dateObj, subDays(new Date(), 1)) ? '@Yesterday' : `@${format(dateObj, 'EEEE')}`}
-                      </span>
-                      <h2 className={`font-bold text-white tracking-tight ${textSize === 'large' ? 'text-3xl' : textSize === 'medium' ? 'text-2xl' : 'text-xl'}`}>{format(dateObj, 'MMMM d, yyyy')}</h2>
+                    <div className="flex flex-col gap-1 border-b border-[#1a1a1a] pb-6 mb-2 text-left relative">
+                      <div className="flex justify-between items-start w-full">
+                        <div className="flex flex-col gap-1">
+                          <span className={`font-black uppercase tracking-[0.3em] ${getDateHeaderClasses()} ${isSameDay(dateObj, new Date()) ? 'text-blue-500' : 'text-gray-600'}`}>
+                            {isSameDay(dateObj, new Date()) ? '@Today' : isSameDay(dateObj, subDays(new Date(), 1)) ? '@Yesterday' : `@${format(dateObj, 'EEEE')}`}
+                          </span>
+                          <h2 className={`font-bold text-white tracking-tight ${textSize === 'large' ? 'text-3xl' : textSize === 'medium' ? 'text-2xl' : 'text-xl'}`}>{format(dateObj, 'MMMM d, yyyy')}</h2>
+                        </div>
+                        <div className="px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-black rounded-lg tracking-wider uppercase flex flex-col items-center shrink-0">
+                          <span className="text-[8px] text-gray-500 font-extrabold uppercase tracking-widest mb-0.5">Progress</span>
+                          <span>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex-1 space-y-1">
@@ -1526,23 +1564,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       </button>
                     </div>
 
-                    <div className="mt-auto pt-8 space-y-8">
-                      {masterTasks.filter(t => t.type === 'counter').map(t => (
-                        <div key={t.id} className="flex flex-col items-center gap-3 py-6 px-4 bg-[#111] rounded-xl border border-[#1a1a1a] shadow-inner">
-                          <span className="text-[10px] font-black uppercase text-gray-600 tracking-[0.2em]">{t.name}</span>
-                          <div className="flex flex-col items-center gap-2">
-                             <span className="text-4xl font-black text-white">
-                                {counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}
-                             </span>
-                             <div className="w-48 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden border border-[#222]">
-                                <div className="h-full bg-blue-500 transition-all duration-500 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]" style={{ width: `${percentage}%` }} />
-                             </div>
-                          </div>
-                        </div>
-                      ))}
-
-
-                    </div>
+                    <div className="mt-auto" />
                   </div>
                 );
               })}
@@ -1590,13 +1612,18 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                               )}
                             </div>
                             <div className="p-2 pb-1.5 border-b border-[#1a1a1a] bg-[#222]/30 flex justify-between items-start">
-                              <div>
+                              <div className="flex-1 min-w-0">
                                 <span className={`font-black uppercase tracking-[0.2em] mb-0.5 block ${getDateHeaderClasses()} ${isSameDay(dateObj, new Date()) ? 'text-blue-400' : 'text-gray-600'}`}>
                                    {isSameDay(dateObj, new Date()) ? '@Today' : isSameDay(dateObj, subDays(new Date(), 1)) ? '@Yesterday' : `@${format(dateObj, 'EEEE')}`}
                                 </span>
-                                <h3 className={`font-bold text-white tracking-tight ${getDateValClasses()}`}>{format(dateObj, 'MMM d, yyyy')}</h3>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <h3 className={`font-bold text-white tracking-tight leading-none ${getDateValClasses()}`}>{format(dateObj, 'MMM d, yyyy')}</h3>
+                                  <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded leading-none shrink-0" title="Progress">
+                                    {counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}
+                                  </span>
+                                </div>
                               </div>
-                              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: record.id, label: format(dateObj, 'MMM d') }); }} className="opacity-0 group-hover/card:opacity-100 p-1 text-gray-700 hover:text-red-500 transition-all"><Trash2 size={11}/></button>
+                              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: record.id, label: format(dateObj, 'MMM d') }); }} className="opacity-0 group-hover/card:opacity-100 p-1 text-gray-700 hover:text-red-500 transition-all shrink-0"><Trash2 size={11}/></button>
                             </div>
                             <div className="p-1 flex-1 flex flex-col">
                               <div className="space-y-0 min-h-[40px]">
@@ -1632,15 +1659,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                   ))}
                                 </SortableContext>
                               </div>
-                              <div className="mt-auto pt-2 space-y-2 border-t border-[#1a1a1a]/30">
-                                {masterTasks.filter(t => t.type === 'counter').map(t => (
-                                  <div key={t.id} className="px-1.5 py-1 bg-[#161616] rounded border border-[#1a1a1a] flex justify-between items-center">
-                                    <span className={`font-black uppercase text-gray-600 tracking-widest ${getSectionTitleClasses()}`}>{t.name}</span>
-                                    <span className={`font-black text-blue-500/80 ${getSectionContentClasses()}`}>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
-                                  </div>
-                                ))}
-
-                              </div>
+                              <div className="mt-auto" />
                             </div>
                           </div>
                         );
@@ -1660,7 +1679,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 <thead>
                   <tr className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
                     <th className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-600 border-r border-[#1a1a1a] w-[180px]">Date Record</th>
-                     {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list').map(task => {
+                     {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter').map(task => {
                        const streak = gamificationStats?.taskStreaks?.[task.id]?.streak || 0;
                        return (
                          <th key={task.id} className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-500 min-w-[120px] text-center">
@@ -1675,15 +1694,22 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map(record => {
+                  {sortedRecords.map(record => {
                     const habits = masterTasks.filter(t => t.type === 'habit');
                     const completedCount = habits.filter(h => !!record.data?.[h.id]).length;
                     const totalCount = habits.length;
                     const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
                     return (
                       <tr key={record.id} className="border-b border-[#1a1a1a] hover:bg-[#161616] transition-colors group/row">
-                        <td className={`p-4 font-bold text-gray-400 border-r border-[#1a1a1a] ${getTextClasses()}`}>{format(parseISO(record.date), 'EEE, MMM d')}</td>
-                        {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list').map(task => (
+                        <td className={`p-4 font-bold text-gray-400 border-r border-[#1a1a1a] ${getTextClasses()}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{format(parseISO(record.date), 'EEE, MMM d')}</span>
+                            <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded tracking-wide leading-none shrink-0" title="Progress">
+                              {counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}
+                            </span>
+                          </div>
+                        </td>
+                        {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter').map(task => (
                           <td key={task.id} className="p-2 text-center border-r border-[#1a1a1a]/50">
                             {task.type === 'habit' ? (
                               <div className={getCheckboxScale()}>
@@ -1692,8 +1718,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                   onClick={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
                                 />
                               </div>
-                            ) : task.type === 'counter' ? (
-                              <span className={`font-black text-blue-500/80 uppercase ${getTextClasses()}`}>{counterFormat === 'fraction' ? `${completedCount}/${totalCount}` : `${percentage}%`}</span>
                             ) : task.type === 'task_counter' ? (
                               <span className={`font-black text-purple-400 uppercase ${getTextClasses()}`}>{typeof record.data?.[task.id] === 'number' ? record.data?.[task.id] : 0}</span>
                             ) : '-'}
@@ -1726,7 +1750,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       )}
       <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
         {announcements.map(a => (
-          <div key={a.id} className={`px-4 py-3 rounded-lg border shadow-2xl text-[12px] font-black uppercase tracking-wider animate-fade-in ${(a.delta < 0 || a.text === 'Action not applicable' || a.text === 'Action not applicable') ? 'bg-red-500/15 border-red-500/30 text-red-300' : a.delta > 0 ? 'bg-green-500/15 border-green-500/30 text-green-300' : 'bg-[#1a1a1a] border-[#2d2d2d] text-gray-300'}`}>
+          <div key={a.id} className={`px-4 py-3 rounded-lg border shadow-2xl text-[12px] font-black uppercase tracking-wider animate-fade-in ${(a.delta < 0 || a.text.toLowerCase().includes('not applicable')) ? 'bg-red-500/15 border-red-500/30 text-red-300' : a.delta > 0 ? 'bg-green-500/15 border-green-500/30 text-green-300' : 'bg-[#1a1a1a] border-[#2d2d2d] text-gray-300'}`}>
             {a.text}
           </div>
         ))}

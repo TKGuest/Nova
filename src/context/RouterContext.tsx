@@ -35,8 +35,33 @@ export function RouterProvider({ children }: { children: ReactNode }) {
         setPathname('/');
       }
     };
+
+    const handleGlobalLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+      if (anchor) {
+        let href = anchor.getAttribute('href');
+        if (href) {
+          // If already has hash, extract it to see if it is a page link
+          if (href.startsWith('#/page/')) {
+            href = href.substring(1);
+          }
+          if (href.startsWith('/page/')) {
+            e.preventDefault();
+            e.stopPropagation();
+            navigate(href);
+          }
+        }
+      }
+    };
+
     window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    document.addEventListener('click', handleGlobalLinkClick, true);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      document.removeEventListener('click', handleGlobalLinkClick, true);
+    };
   }, []);
 
   // Parse pageId if the path matches /page/[pageId]

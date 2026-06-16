@@ -156,7 +156,7 @@ export function Sidebar() {
       });
       router.push(`/page/${id}`);
     } else if (action === 'new-tab') {
-      window.open(`/page/${page.id}`, '_blank');
+      window.open(`/#/page/${page.id}`, '_blank');
     } else if (action === 'side-peek') {
       setSidePeekPageId(page.id);
     }
