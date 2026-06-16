@@ -114,7 +114,7 @@ export function SidePeek() {
           <button onClick={() => {
               setSidePeekPageId(null);
               setSidePeekRecordId(null);
-              window.open(`/page/${sidePeekPageId}`, '_blank');
+              window.open(`/#/page/${sidePeekPageId}`, '_blank');
             }} 
             className="p-1 hover:bg-[#37373d] rounded text-gray-400 hover:text-white transition-colors" title="Open in new tab">
             <Maximize2 size={14}/>

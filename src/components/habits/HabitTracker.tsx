@@ -70,7 +70,7 @@ function parseNotesWithLinks(text: string, pages: PageModel[]): React.ReactNode 
       elements.push(
         <a 
           key={`page-lnk-${idx}`} 
-          href={m.url} 
+          href={`#${m.url}`} 
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();

@@ -131,7 +131,7 @@ export function Sidebar() {
         }
       });
     } else if (action === 'copy-link') {
-      const url = `${window.location.origin}/page/${page.id}`;
+      const url = `${window.location.origin}/#/page/${page.id}`;
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url);
         showToast('Link copied to clipboard');

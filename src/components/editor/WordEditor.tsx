@@ -186,11 +186,16 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
       const target = e.target as HTMLElement;
       const anchor = target.closest('a');
       if (anchor) {
-        const href = anchor.getAttribute('href');
-        if (href && href.startsWith('/page/')) {
-          e.preventDefault();
-          e.stopPropagation();
-          window.location.hash = href;
+        let href = anchor.getAttribute('href');
+        if (href) {
+          if (href.startsWith('#/page/')) {
+            href = href.substring(1);
+          }
+          if (href.startsWith('/page/')) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.location.hash = href;
+          }
         }
       }
     };
@@ -289,7 +294,7 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
                         const { from } = editorMentionState.range;
                         const currentTo = editor.state.selection.to;
                         editor.chain().focus()
-                          .insertContentAt({ from, to: currentTo }, `<a href="/page/${page.id}">@${page.title}</a> `)
+                          .insertContentAt({ from, to: currentTo }, `<a href="#/page/${page.id}">@${page.title}</a> `)
                           .run();
                         setEditorMentionState(null);
                       }}
