@@ -81,6 +81,27 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
       }),
     ],
     content: '',
+    editorProps: {
+      handleClick: (view, pos, event) => {
+        const target = event.target as HTMLElement;
+        const anchor = target.closest('a');
+        if (anchor) {
+          let href = anchor.getAttribute('href');
+          if (href) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (href.startsWith('#/page/')) {
+              href = href.substring(1);
+            }
+            if (href.startsWith('/page/')) {
+              window.location.hash = href;
+            }
+            return true;
+          }
+        }
+        return false;
+      },
+    },
     editable: true,
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
