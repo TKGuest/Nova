@@ -5,7 +5,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, query, orderBy, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Link, usePathname, useRouter } from '@/context/RouterContext';
-import { Plus, FileText, CalendarCheck2, MoreHorizontal, Star, Link2, Copy, Edit2, CornerUpRight, Trash2, ExternalLink, Columns, Settings, Calendar, Search, Sparkles } from 'lucide-react';
+import { Plus, FileText, CalendarCheck2, MoreHorizontal, Star, Link2, Copy, Edit2, CornerUpRight, Trash2, ExternalLink, Columns, Settings, Calendar, Search, Sparkles, Bell, Clock } from 'lucide-react';
 import { UserProfile } from '@/components/auth/UserProfile';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useNotification } from '@/context/NotificationContext';
@@ -68,12 +68,12 @@ export function Sidebar() {
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  const createPage = async (type: 'note' | 'habit') => {
+  const createPage = async (type: 'note' | 'habit' | 'reminder') => {
     if (!user) return;
     const id = Date.now().toString();
     const newPage: PageModel = {
       id,
-      title: type === 'note' ? 'Untitled Note' : 'New Habit Tracker',
+      title: type === 'note' ? 'Untitled Note' : type === 'habit' ? 'New Habit Tracker' : 'Reminders & Alarms Hub',
       type,
       createdAt: Date.now(),
     };
@@ -192,7 +192,7 @@ export function Sidebar() {
                       onContextMenu={(e) => handleContextMenu(e, page)}
                     >
                       <Link href={`/page/${page.id}`} className="flex items-center gap-2 px-3 py-1.5 flex-1 min-w-0">
-                        {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={16} className="text-gray-400 shrink-0" />}
+                        {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : page.type === 'habit' ? <CalendarCheck2 size={16} className="text-gray-400 shrink-0" /> : <Bell size={16} className="text-purple-400 shrink-0" />}
                         <span className="truncate text-sm text-gray-200 font-medium">{page.title}</span>
                       </Link>
                       <button 
@@ -250,7 +250,7 @@ export function Sidebar() {
                       onContextMenu={(e) => handleContextMenu(e, page)}
                     >
                       <div className="flex items-center gap-2 px-3 py-1.5 flex-1 min-w-0">
-                        {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={16} className="text-gray-400 shrink-0" />}
+                        {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : page.type === 'habit' ? <CalendarCheck2 size={16} className="text-gray-400 shrink-0" /> : <Bell size={16} className="text-purple-400 shrink-0" />}
                         <span className="truncate text-sm text-gray-300 font-medium line-through">{page.title}</span>
                       </div>
                       <button 
@@ -279,7 +279,7 @@ export function Sidebar() {
                 >
                   {renamingPageId === page.id ? (
                      <div className="flex items-center gap-2 px-3 py-1.5 flex-1 min-w-0">
-                       {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={16} className="text-gray-400 shrink-0" />}
+                       {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : page.type === 'habit' ? <CalendarCheck2 size={16} className="text-gray-400 shrink-0" /> : <Bell size={16} className="text-purple-400 shrink-0" />}
                        <input 
                          autoFocus
                          className="flex-1 min-w-0 bg-[#37373d] text-sm text-gray-200 border border-[#2383e2] rounded px-1.5 py-0.5 outline-none font-medium h-[22px]"
@@ -297,7 +297,7 @@ export function Sidebar() {
                       href={`/page/${page.id}`} 
                       className="flex items-center gap-2 px-3 py-1.5 flex-1 min-w-0"
                     >
-                      {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={16} className="text-gray-400 shrink-0" />}
+                      {page.type === 'note' ? <FileText size={16} className="text-gray-400 shrink-0" /> : page.type === 'habit' ? <CalendarCheck2 size={16} className="text-gray-400 shrink-0" /> : <Bell size={16} className="text-purple-400 shrink-0" />}
                       <span className="truncate text-sm text-gray-200 font-medium">{page.title}</span>
                     </Link>
                   )}
@@ -320,6 +320,9 @@ export function Sidebar() {
               </button>
               <button onClick={() => createPage('habit')} className="w-full flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#2a2a2b] rounded-md transition-colors text-left text-sm cursor-pointer">
                 <Plus size={16} /> <span className="font-medium">New Habit Tracker</span>
+              </button>
+              <button onClick={() => createPage('reminder')} className="w-full flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#2a2a2b] rounded-md transition-colors text-left text-sm cursor-pointer">
+                <Plus size={16} /> <span className="font-medium">New Reminder Page</span>
               </button>
               <button onClick={() => setSettingsOpen(true)} className="w-full flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#2a2a2b] rounded-md transition-colors text-left text-sm cursor-pointer mt-2">
                 <Settings size={16} /> <span className="font-medium">Settings</span>

@@ -7,6 +7,20 @@ export default defineConfig(() => {
   return {
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     plugins: [react(), tailwindcss()],
+    optimizeDeps: {
+      exclude: [
+        'firebase',
+        'firebase/app',
+        'firebase/auth',
+        'firebase/firestore',
+        'firebase/storage',
+        'firebase/messaging',
+        '@firebase/app',
+        '@firebase/auth',
+        '@firebase/firestore',
+        '@firebase/component'
+      ]
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

@@ -21,7 +21,7 @@ export interface Block {
 export interface PageModel {
   id: string;
   title: string;
-  type: 'note' | 'habit';
+  type: 'note' | 'habit' | 'reminder';
   createdAt: number;
   isFavorite?: boolean;
   deletedAt?: number;
@@ -82,6 +82,7 @@ export interface HabitStats {
   streakTargetTasks?: number;
   streakInsuranceCost?: number;
   streakInsuranceMax?: number;
+  weeklyResetDay?: number;
 }
 
 export interface InventoryItem {

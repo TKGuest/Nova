@@ -110,12 +110,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { LexoRank } from 'lexorank';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { GamificationDashboard } from './GamificationDashboard';
+import { WeeklyTasksDashboard } from './WeeklyTasksDashboard';
+import { TodoDashboard } from './TodoDashboard';
 import { playAscendingFanfare, playDing } from '@/lib/sounds';
 
 type PropertyType = 'habit' | 'counter' | 'notes' | 'toggle_list' | 'task_counter';
 type TextSize = 'small' | 'medium' | 'large';
 
-interface MasterTask {
+export interface MasterTask {
   id: string;
   name: string;
   sortOrder: string;
@@ -142,9 +144,19 @@ interface MasterTask {
   // Custom notes options
   notesMode?: 'separate' | 'sync';
   syncedNoteText?: string;
+  period?: 'daily' | 'weekly';
 }
 
-interface PageRecord {
+export function getStartOfWeekDate(date: Date, resetDay: number): Date {
+  const d = new Date(date);
+  const day = d.getDay(); // 0-6
+  const diff = (day - resetDay + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export interface PageRecord {
   id: string;
   date: string;
   data: Record<string, boolean | number>;
@@ -162,6 +174,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const { sidePeekRecordId, setSidePeekRecordId, setSidePeekPageId } = useWorkspace();
   const [masterTasks, setMasterTasks] = useState<MasterTask[]>([]);
   const [records, setRecords] = useState<PageRecord[]>([]);
+  const [weeklyRecords, setWeeklyRecords] = useState<PageRecord[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
   const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set());
   const [counterFormat, setCounterFormat] = useState<'fraction' | 'percent'>('fraction');
@@ -179,6 +192,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, label: string } | null>(null);
   const [isGamificationOpen, setIsGamificationOpen] = useState(false);
+  const [isWeeklyTasksOpen, setIsWeeklyTasksOpen] = useState(false);
+  const [isTodoOpen, setIsTodoOpen] = useState(false);
   const [gamificationStats, setGamificationStats] = useState<HabitStats | null>(null);
 
   const currentStreak = gamificationStats?.currentStreak ?? 0;
@@ -345,6 +360,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     const unsubRecords = onSnapshot(qRecords, (snapshot) => {
       setRecords(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as PageRecord)));
     });
+    const qWeeklyRecords = query(collection(db, 'users', user.uid, 'pages', pageId, 'weekly_records'), orderBy('date', 'desc'));
+    const unsubWeeklyRecords = onSnapshot(qWeeklyRecords, (snapshot) => {
+      setWeeklyRecords(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as PageRecord)));
+    });
     const unsubPage = onSnapshot(doc(db, 'users', user.uid, 'pages', pageId), (snapshot) => {
       if (snapshot.exists()) setPageMeta({ id: snapshot.id, ...snapshot.data() } as PageModel);
     });
@@ -406,7 +425,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     };
     window.addEventListener('click', handleClick);
     return () => { 
-      unsubMaster(); unsubRecords(); unsubPage(); unsubStats(); unsubInv(); unsubShop(); unsubPages();
+      unsubMaster(); unsubRecords(); unsubWeeklyRecords(); unsubPage(); unsubStats(); unsubInv(); unsubShop(); unsubPages();
       window.removeEventListener('open-task-manager', handleOpenManager);
       window.removeEventListener('click', handleClick);
     };
@@ -542,12 +561,30 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     return () => clearInterval(interval);
   }, [user, pageId, pageMeta]);
 
+  // Auto-create weekly record when stats load or week rolls over
+  useEffect(() => {
+    if (!user || !pageId) return;
+    const createWeeklyRecord = async () => {
+      const resetDay = gamificationStats?.weeklyResetDay ?? 1;
+      const startOfWeekObj = getStartOfWeekDate(new Date(), resetDay);
+      const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
+      const recordId = `rec_week_${weekStr}`;
+      const recordRef = doc(db, 'users', user.uid, 'pages', pageId, 'weekly_records', recordId);
+      const snap = await getDoc(recordRef);
+      if (!snap.exists()) {
+        const data: Record<string, unknown> = { id: recordId, date: weekStr, data: {} };
+        await setDoc(recordRef, data);
+      }
+    };
+    createWeeklyRecord();
+  }, [user, pageId, gamificationStats?.weeklyResetDay]);
+
   const weeklyGroups = useMemo(() => {
     const groups: Record<string, { label: string, items: PageRecord[] }> = {};
     const today = startOfDay(new Date());
+    const weekStartsOn = ((gamificationStats?.weeklyResetDay ?? 1) % 7) as (0 | 1 | 2 | 3 | 4 | 5 | 6);
     records.forEach(r => {
       const d = parseISO(r.date);
-      const weekStartsOn = 1;
       const weekKey = format(startOfWeek(d, { weekStartsOn }), 'yyyy-MM-dd');
       if (!groups[weekKey]) {
         const start = startOfWeek(d, { weekStartsOn });
@@ -555,9 +592,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       }
       groups[weekKey].items.push(r);
     });
-    const currentWeekKey = format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const currentWeekKey = format(startOfWeek(today, { weekStartsOn }), 'yyyy-MM-dd');
     if (!groups[currentWeekKey]) {
-      const start = startOfWeek(today, { weekStartsOn: 1 });
+      const start = startOfWeek(today, { weekStartsOn });
       groups[currentWeekKey] = { label: `${format(start, 'MMM d')} \u2013 ${format(addDays(start, 6), 'MMM d yyyy')}`, items: [] };
     }
     Object.values(groups).forEach(g => {
@@ -568,7 +605,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       });
     });
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [records, daysSorting]);
+  }, [records, daysSorting, gamificationStats?.weeklyResetDay]);
 
   const sortedRecords = useMemo(() => {
     return [...records].sort((a, b) => {
@@ -593,7 +630,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     else if (type === 'toggle_list') defaultName = 'New Group';
     else if (type === 'task_counter') defaultName = 'New Task Counter';
 
-    await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', id), { id, name: defaultName, sortOrder, type });
+    await setDoc(doc(db, 'users', user.uid, 'pages', pageId, 'master_tasks', id), { id, name: defaultName, sortOrder, type, period: 'daily' });
   };
 
   const deleteMasterTask = async (id: string) => {
@@ -802,6 +839,77 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       }
     } catch (err) {
       console.warn("Gamification error:", err);
+    }
+  };
+
+  const toggleWeeklyCompletion = async (recordDateStr: string, taskId: string, current: boolean) => {
+    if (!user) return;
+    const task = masterTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const isCompleted = !current;
+
+    const resetDay = gamificationStats?.weeklyResetDay ?? 1;
+    const cardDate = parseISO(recordDateStr);
+    const startOfWeekObj = getStartOfWeekDate(cardDate, resetDay);
+    const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
+    const weeklyRecordId = `rec_week_${weekStr}`;
+
+    const weeklyRecordRef = doc(db, 'users', user.uid, 'pages', pageId, 'weekly_records', weeklyRecordId);
+    const snap = await getDoc(weeklyRecordRef);
+    
+    let weeklyRecordData: Record<string, boolean | number> = {};
+    if (snap.exists()) {
+      weeklyRecordData = snap.data().data || {};
+    } else {
+      await setDoc(weeklyRecordRef, { id: weeklyRecordId, date: weekStr, data: {} });
+    }
+
+    const nextWeeklyRecordData = { ...weeklyRecordData, [taskId]: isCompleted };
+
+    try {
+      await setDoc(weeklyRecordRef, { id: weeklyRecordId, date: weekStr, data: nextWeeklyRecordData }, { merge: true });
+
+      const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+      const statsSnap = await getDoc(statsRef);
+      if (statsSnap.exists()) {
+        const stats = statsSnap.data() as any;
+        const basePoints = task.pointsValue || 10;
+        const multiplier = stats.streakMultiplierActive !== false ? (stats.streakMultiplier ?? 1.0) : 1.0;
+        const pointsChange = Math.round(basePoints * multiplier);
+
+        let newPoints = stats.points;
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        let pointsEarnedToday = stats.pointsEarnedToday || 0;
+        if (stats.lastPointGainDate !== todayStr) {
+          pointsEarnedToday = 0;
+        }
+
+        const DAILY_CAP = stats.dailyPointCap ?? 200;
+        let actualGain = pointsChange;
+
+        if (isCompleted) {
+          if (pointsEarnedToday + actualGain > DAILY_CAP) {
+            actualGain = Math.max(0, DAILY_CAP - pointsEarnedToday);
+          }
+          newPoints += actualGain;
+          pointsEarnedToday += actualGain;
+          playDing();
+          showPointAnnouncement(actualGain > 0 ? `+${actualGain} pts` : 'Daily cap reached', actualGain);
+        } else {
+          newPoints = stats.points - pointsChange;
+          pointsEarnedToday = Math.max(0, pointsEarnedToday - pointsChange);
+          showPointAnnouncement(`-${pointsChange} pts canceled`, -pointsChange);
+        }
+
+        await updateDoc(statsRef, {
+          points: newPoints,
+          pointsEarnedToday,
+          lastPointGainDate: todayStr,
+          debt: newPoints < 0
+        });
+      }
+    } catch (err) {
+      console.warn("Weekly Gamification error:", err);
     }
   };
 
@@ -1375,10 +1483,36 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           <div className="flex items-center gap-2">
             <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 bg-[#2383e2] text-white rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10 shrink-0"><Plus size={14}/> New</button>
             <button 
-              onClick={() => setIsGamificationOpen(!isGamificationOpen)} 
+              onClick={() => {
+                setIsGamificationOpen(!isGamificationOpen);
+                setIsWeeklyTasksOpen(false);
+                setIsTodoOpen(false);
+              }} 
               className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isGamificationOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
             >
               <Gamepad2 size={14}/> Gamify
+            </button>
+
+            <button 
+              onClick={() => {
+                setIsWeeklyTasksOpen(!isWeeklyTasksOpen);
+                setIsGamificationOpen(false);
+                setIsTodoOpen(false);
+              }} 
+              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isWeeklyTasksOpen ? 'bg-blue-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-blue-400 border-blue-900/30'}`}
+            >
+              <CalendarIcon size={14}/> Weekly Tasks
+            </button>
+
+            <button 
+              onClick={() => {
+                setIsTodoOpen(!isTodoOpen);
+                setIsGamificationOpen(false);
+                setIsWeeklyTasksOpen(false);
+              }} 
+              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isTodoOpen ? 'bg-indigo-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-indigo-400 border-indigo-900/30'}`}
+            >
+              <Check size={14}/> To-Do
             </button>
 
             <div className="relative">
@@ -1453,6 +1587,33 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       <span className="text-[9px] text-gray-600 leading-normal block">Earned when all daily main habits are successfully completed.</span>
                     </div>
                   </div>
+                  <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
+                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Weekly Reset Day</span>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between bg-[#111] border border-[#2d2d2d] rounded px-3 py-2">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Reset On</span>
+                        <select
+                          className="bg-transparent text-right outline-none text-white text-[11px] font-medium cursor-pointer"
+                          value={gamificationStats?.weeklyResetDay ?? 1}
+                          onChange={async (e) => {
+                            if (!user) return;
+                            const nextVal = parseInt(e.target.value);
+                            const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+                            await updateDoc(statsRef, { weeklyResetDay: nextVal });
+                          }}
+                        >
+                          <option value={1} className="bg-[#1e1e1e]">Monday</option>
+                          <option value={2} className="bg-[#1e1e1e]">Tuesday</option>
+                          <option value={3} className="bg-[#1e1e1e]">Wednesday</option>
+                          <option value={4} className="bg-[#1e1e1e]">Thursday</option>
+                          <option value={5} className="bg-[#1e1e1e]">Friday</option>
+                          <option value={6} className="bg-[#1e1e1e]">Saturday</option>
+                          <option value={0} className="bg-[#1e1e1e]">Sunday</option>
+                        </select>
+                      </div>
+                      <span className="text-[9px] text-gray-600 leading-normal block">Decides which day of the week your weekly tasks reset.</span>
+                    </div>
+                  </div>
                   <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3 md:col-span-2">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Gamification Rules</span>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1492,6 +1653,26 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             <div className="p-4 bg-[#111] rounded-xl border border-purple-900/30 min-h-[400px]">
                <GamificationDashboard pageId={pageId} onOpenShop={() => setIsShopOpen(true)} />
             </div>
+          ) : isWeeklyTasksOpen ? (
+            <div className="p-4 md:p-6 bg-[#111] rounded-xl border border-blue-900/30 min-h-[400px]">
+               <WeeklyTasksDashboard 
+                 pageId={pageId} 
+                 masterTasks={masterTasks}
+                 weeklyRecords={weeklyRecords}
+                 gamificationStats={gamificationStats}
+                 onToggleWeeklyCompletion={toggleWeeklyCompletion}
+                 onClose={() => setIsWeeklyTasksOpen(false)}
+               />
+            </div>
+          ) : isTodoOpen ? (
+            <div className="p-4 md:p-6 bg-[#111] rounded-xl border border-indigo-900/30 min-h-[400px]">
+               <TodoDashboard 
+                 pageId={pageId}
+                 gamificationStats={gamificationStats}
+                 showPointAnnouncement={showPointAnnouncement}
+                 onClose={() => setIsTodoOpen(false)}
+               />
+            </div>
           ) : isPeek && sidePeekRecordId ? (
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
               {records.filter(r => r.id === sidePeekRecordId).map(record => {
@@ -1524,42 +1705,100 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       </div>
                     </div>
 
-                    <div className="flex-1 space-y-1">
-                      <h3 className={`font-black uppercase text-gray-700 tracking-widest mb-4 px-1 ${getSectionTitleClasses()}`}>Daily Habits</h3>
-                      <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-0.5">
-                          {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes')).map(task => (
-                              <SortableMasterItem 
-                                key={task.id} 
-                                id={`${record.id}::${task.id}`} 
-                                task={task} 
-                                allTasks={masterTasks}
-                                allPages={allPages}
-                                onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
-                                onUpdateRecordNotes={(taskId: string, text: string) => {
-                                  const rRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id);
-                                  updateDoc(rRef, { notes: text, [`data.notesMap.${taskId}`]: text });
-                                }}
-                                completed={!!record.data?.[task.id]} 
-                                recordData={record.data || {}}
-                                isPeek={true}
-                                streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
-                                onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
-                                onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
-                                onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
-                                onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => toggleSubTask(record.id, targetTaskId, subId, current)}
-                                onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
-                                onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
-                                isEditing={editingTaskId === task.id} 
-                                onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
-                                textSizeClass={textSize === 'large' ? 'text-[19px]' : textSize === 'medium' ? 'text-[17px]' : 'text-[15px]'} 
-                                checkboxScale="scale-[1.15]" 
-                                textTruncateMode={textTruncateMode}
-                              />
-                          ))}
+                    <div className="flex-1 space-y-6">
+                      {/* Daily Habits Section */}
+                      <div className="space-y-1 text-left">
+                        <h3 className={`font-black uppercase text-gray-700 tracking-widest mb-4 px-1 ${getSectionTitleClasses()}`}>Daily Habits</h3>
+                        <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
+                          <div className="space-y-0.5">
+                            {masterTasks.filter(t => !t.parentId && (!t.period || t.period === 'daily') && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes')).map(task => (
+                                <SortableMasterItem 
+                                  key={task.id} 
+                                  id={`${record.id}::${task.id}`} 
+                                  task={task} 
+                                  allTasks={masterTasks}
+                                  allPages={allPages}
+                                  onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
+                                  onUpdateRecordNotes={(taskId: string, text: string) => {
+                                    const rRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id);
+                                    updateDoc(rRef, { notes: text, [`data.notesMap.${taskId}`]: text });
+                                  }}
+                                  completed={!!record.data?.[task.id]} 
+                                  recordData={record.data || {}}
+                                  isPeek={true}
+                                  streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
+                                  onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
+                                  onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
+                                  onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
+                                  onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => toggleSubTask(record.id, targetTaskId, subId, current)}
+                                  onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
+                                  onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
+                                  isEditing={editingTaskId === task.id} 
+                                  onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
+                                  textSizeClass={textSize === 'large' ? 'text-[19px]' : textSize === 'medium' ? 'text-[17px]' : 'text-[15px]'} 
+                                  checkboxScale="scale-[1.15]" 
+                                  textTruncateMode={textTruncateMode}
+                                />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </div>
+
+                      {/* Weekly Tasks Section */}
+                      <div className="space-y-1 text-left pt-2 border-t border-[#1a1a1a]/50">
+                        <div className="flex items-center justify-between mb-4 px-1">
+                          <h3 className={`font-black uppercase text-gray-700 tracking-widest ${getSectionTitleClasses()}`}>Weekly Tasks</h3>
+                          <span className="text-[10px] text-gray-500 font-medium">Resets on {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gamificationStats?.weeklyResetDay ?? 1]}</span>
                         </div>
-                      </SortableContext>
-                      
+                        <div className="space-y-0.5">
+                          {(() => {
+                            const resetDay = gamificationStats?.weeklyResetDay ?? 1;
+                            const startOfWeekObj = getStartOfWeekDate(dateObj, resetDay);
+                            const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
+                            const currentWeeklyRecord = weeklyRecords.find(wr => wr.date === weekStr);
+                            const weeklyTasks = masterTasks.filter(t => !t.parentId && t.period === 'weekly' && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes'));
+
+                            if (weeklyTasks.length === 0) {
+                              return <p className="text-xs text-gray-600 italic py-2 px-1">No weekly tasks configured.</p>;
+                            }
+
+                            return weeklyTasks.map(task => {
+                              const isCompleted = !!currentWeeklyRecord?.data?.[task.id];
+                              return (
+                                <SortableMasterItem 
+                                  key={task.id} 
+                                  id={`${record.id}::${task.id}`} 
+                                  task={task} 
+                                  allTasks={masterTasks}
+                                  allPages={allPages}
+                                  onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
+                                  onUpdateRecordNotes={(taskId: string, text: string) => {
+                                    if (!currentWeeklyRecord) return;
+                                    const wrRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'weekly_records', currentWeeklyRecord.id);
+                                    updateDoc(wrRef, { notes: text, [`data.notesMap.${taskId}`]: text });
+                                  }}
+                                  completed={isCompleted} 
+                                  recordData={currentWeeklyRecord?.data || {}}
+                                  isPeek={true}
+                                  streak={0}
+                                  onToggle={() => toggleWeeklyCompletion(record.date, task.id, isCompleted)} 
+                                  onToggleTask={(targetTaskId: string) => toggleWeeklyCompletion(record.date, targetTaskId, !!currentWeeklyRecord?.data?.[targetTaskId])}
+                                  onToggleSubTask={(subId: string, current: boolean) => {}}
+                                  onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => {}}
+                                  onAdjustCounter={(delta: number) => {}}
+                                  onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
+                                  isEditing={editingTaskId === task.id} 
+                                  onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
+                                  textSizeClass={textSize === 'large' ? 'text-[19px]' : textSize === 'medium' ? 'text-[17px]' : 'text-[15px]'} 
+                                  checkboxScale="scale-[1.15]" 
+                                  textTruncateMode={textTruncateMode}
+                                />
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+
                       <button onClick={() => addMasterTask()} className="flex items-center gap-2 px-2 py-3 text-gray-700 hover:text-gray-400 text-[11px] font-bold uppercase tracking-widest transition-all mt-2 border-t border-[#1a1a1a]/50 w-full">
                         <Plus size={14}/> Add Habit Property
                       </button>
@@ -1627,38 +1866,93 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                               <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: record.id, label: format(dateObj, 'MMM d') }); }} className="opacity-0 group-hover/card:opacity-100 p-1 text-gray-700 hover:text-red-500 transition-all shrink-0"><Trash2 size={11}/></button>
                             </div>
                             <div className="p-1 flex-1 flex flex-col">
-                              <div className="space-y-0 min-h-[40px]">
+                              <div className="space-y-2 min-h-[40px]">
+                                {/* Daily Tasks in Main Card */}
                                 <SortableContext items={masterTasks.map(t => `${record.id}::${t.id}`)} strategy={verticalListSortingStrategy}>
-                                  {masterTasks.filter(t => !t.parentId && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes')).map(task => (
-                                    <SortableMasterItem 
-                                      key={task.id} 
-                                      id={`${record.id}::${task.id}`} 
-                                      task={task} 
-                                      allTasks={masterTasks}
-                                      completed={!!record.data?.[task.id]} 
-                                      recordData={record.data || {}}
-                                      isPeek={false}
-                                      allPages={allPages}
-                                      onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
-                                      onUpdateRecordNotes={(taskId: string, text: string) => {
-                                        const rRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id);
-                                        updateDoc(rRef, { notes: text, [`data.notesMap.${taskId}`]: text });
-                                      }}
-                                      streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
-                                      onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
-                                      onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
-                                      onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
-                                      onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => toggleSubTask(record.id, targetTaskId, subId, current)}
-                                      onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
-                                      onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
-                                      isEditing={editingTaskId === task.id} 
-                                      onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
-                                      textSizeClass={getTextClasses()} 
-                                      checkboxScale={getCheckboxScale()} 
-                                      textTruncateMode={textTruncateMode}
-                                    />
-                                  ))}
+                                  <div className="space-y-0">
+                                    {masterTasks.filter(t => !t.parentId && (!t.period || t.period === 'daily') && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes')).map(task => (
+                                      <SortableMasterItem 
+                                        key={task.id} 
+                                        id={`${record.id}::${task.id}`} 
+                                        task={task} 
+                                        allTasks={masterTasks}
+                                        completed={!!record.data?.[task.id]} 
+                                        recordData={record.data || {}}
+                                        isPeek={false}
+                                        allPages={allPages}
+                                        onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
+                                        onUpdateRecordNotes={(taskId: string, text: string) => {
+                                          const rRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'records', record.id);
+                                          updateDoc(rRef, { notes: text, [`data.notesMap.${taskId}`]: text });
+                                        }}
+                                        streak={gamificationStats?.taskStreaks?.[task.id]?.streak || 0}
+                                        onToggle={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
+                                        onToggleTask={(targetTaskId: string) => toggleCompletion(record.id, targetTaskId, !!record.data?.[targetTaskId])}
+                                        onToggleSubTask={(subId: string, current: boolean) => toggleSubTask(record.id, task.id, subId, current)}
+                                        onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => toggleSubTask(record.id, targetTaskId, subId, current)}
+                                        onAdjustCounter={(delta: number) => adjustTaskCounter(record.id, task.id, delta)}
+                                        onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
+                                        isEditing={editingTaskId === task.id} 
+                                        onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
+                                        textSizeClass={getTextClasses()} 
+                                        checkboxScale={getCheckboxScale()} 
+                                        textTruncateMode={textTruncateMode}
+                                      />
+                                    ))}
+                                  </div>
                                 </SortableContext>
+
+                                {/* Weekly Tasks in Main Card */}
+                                {(() => {
+                                  const resetDay = gamificationStats?.weeklyResetDay ?? 1;
+                                  const startOfWeekObj = getStartOfWeekDate(dateObj, resetDay);
+                                  const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
+                                  const currentWeeklyRecord = weeklyRecords.find(wr => wr.date === weekStr);
+                                  const weeklyTasks = masterTasks.filter(t => !t.parentId && t.period === 'weekly' && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes'));
+
+                                  if (weeklyTasks.length === 0) return null;
+
+                                  return (
+                                    <div className="border-t border-[#1a1a1a] pt-1.5 mt-1">
+                                      <span className="text-[8px] font-black uppercase text-gray-500 tracking-wider mb-1 block">Weekly Tasks</span>
+                                      <div className="space-y-0">
+                                        {weeklyTasks.map(task => {
+                                          const isCompleted = !!currentWeeklyRecord?.data?.[task.id];
+                                          return (
+                                            <SortableMasterItem 
+                                              key={task.id} 
+                                              id={`${record.id}::${task.id}`} 
+                                              task={task} 
+                                              allTasks={masterTasks}
+                                              completed={isCompleted} 
+                                              recordData={currentWeeklyRecord?.data || {}}
+                                              isPeek={false}
+                                              allPages={allPages}
+                                              onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
+                                              onUpdateRecordNotes={(taskId: string, text: string) => {
+                                                if (!currentWeeklyRecord) return;
+                                                const wrRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'weekly_records', currentWeeklyRecord.id);
+                                                updateDoc(wrRef, { notes: text, [`data.notesMap.${taskId}`]: text });
+                                              }}
+                                              streak={0}
+                                              onToggle={() => toggleWeeklyCompletion(record.date, task.id, isCompleted)} 
+                                              onToggleTask={(targetTaskId: string) => toggleWeeklyCompletion(record.date, targetTaskId, !!currentWeeklyRecord?.data?.[targetTaskId])}
+                                              onToggleSubTask={(subId: string, current: boolean) => {}}
+                                              onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => {}}
+                                              onAdjustCounter={(delta: number) => {}}
+                                              onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
+                                              isEditing={editingTaskId === task.id} 
+                                              onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
+                                              textSizeClass={getTextClasses()} 
+                                              checkboxScale={getCheckboxScale()} 
+                                              textTruncateMode={textTruncateMode}
+                                            />
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               <div className="mt-auto" />
                             </div>
@@ -1682,11 +1976,15 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                     <th className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-600 border-r border-[#1a1a1a] w-[180px]">Date Record</th>
                      {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter').map(task => {
                        const streak = gamificationStats?.taskStreaks?.[task.id]?.streak || 0;
+                       const isWeekly = task.period === 'weekly';
                        return (
                          <th key={task.id} className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-500 min-w-[120px] text-center">
-                           <div className="flex items-center justify-center gap-1">
-                             <span>{task.name}</span>
-                             {streak > 0 && <span className="text-[9px] text-amber-500 font-bold bg-amber-500/10 px-1 rounded shrink-0">🔥 {streak}</span>}
+                           <div className="flex flex-col items-center justify-center gap-0.5">
+                             <div className="flex items-center justify-center gap-1">
+                               <span>{task.name}</span>
+                               {streak > 0 && <span className="text-[9px] text-amber-500 font-bold bg-amber-500/10 px-1 rounded shrink-0">🔥 {streak}</span>}
+                             </div>
+                             {isWeekly && <span className="text-[8px] text-blue-400 font-bold bg-blue-500/10 px-1 rounded shrink-0">Weekly</span>}
                            </div>
                          </th>
                        );
@@ -1710,20 +2008,35 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             </span>
                           </div>
                         </td>
-                        {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter').map(task => (
-                          <td key={task.id} className="p-2 text-center border-r border-[#1a1a1a]/50">
-                            {task.type === 'habit' ? (
-                              <div className={getCheckboxScale()}>
-                                <Checkbox 
-                                  checked={!!record.data?.[task.id]} 
-                                  onClick={() => toggleCompletion(record.id, task.id, !!record.data?.[task.id])} 
-                                />
-                              </div>
-                            ) : task.type === 'task_counter' ? (
-                              <span className={`font-black text-purple-400 uppercase ${getTextClasses()}`}>{typeof record.data?.[task.id] === 'number' ? record.data?.[task.id] : 0}</span>
-                            ) : '-'}
-                          </td>
-                        ))}
+                        {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter').map(task => {
+                          const isWeekly = task.period === 'weekly';
+                          const resetDay = gamificationStats?.weeklyResetDay ?? 1;
+                          const startOfWeekObj = getStartOfWeekDate(parseISO(record.date), resetDay);
+                          const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
+                          const currentWeeklyRecord = weeklyRecords.find(wr => wr.date === weekStr);
+                          const isCompleted = isWeekly ? !!currentWeeklyRecord?.data?.[task.id] : !!record.data?.[task.id];
+
+                          return (
+                            <td key={task.id} className="p-2 text-center border-r border-[#1a1a1a]/50">
+                              {task.type === 'habit' ? (
+                                <div className={getCheckboxScale()}>
+                                  <Checkbox 
+                                    checked={isCompleted} 
+                                    onClick={() => {
+                                      if (isWeekly) {
+                                        toggleWeeklyCompletion(record.date, task.id, isCompleted);
+                                      } else {
+                                        toggleCompletion(record.id, task.id, isCompleted);
+                                      }
+                                    }} 
+                                  />
+                                </div>
+                              ) : task.type === 'task_counter' ? (
+                                <span className={`font-black text-purple-400 uppercase ${getTextClasses()}`}>{typeof record.data?.[task.id] === 'number' ? record.data?.[task.id] : 0}</span>
+                              ) : '-'}
+                            </td>
+                          );
+                        })}
                         <td className="p-2 text-right">
                           <button onClick={() => setConfirmDelete({ id: record.id, label: format(parseISO(record.date), 'MMM d') })} className="opacity-0 group-hover/row:opacity-100 p-1 text-gray-700 hover:text-red-500 transition-all"><Trash2 size={12}/></button>
                         </td>
@@ -2701,6 +3014,21 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
                 {toggleLists.map(tl => (
                   <option key={tl.id} value={tl.id}>{tl.name}</option>
                 ))}
+              </select>
+            </div>
+          )}
+
+          {/* Task Period Settings */}
+          {task.type !== 'toggle_list' && (
+            <div className="flex flex-col gap-1 pb-3 border-b border-[#2d2d2d]/50">
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Task Frequency (Reset Interval)</span>
+              <select
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                value={task.period || 'daily'}
+                onChange={(e) => onUpdate(task.id, { period: e.target.value })}
+              >
+                <option value="daily">Daily Habit (Resets every day)</option>
+                <option value="weekly">Weekly Task (Resets every week)</option>
               </select>
             </div>
           )}

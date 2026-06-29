@@ -32,23 +32,42 @@ export function Header() {
       return;
     }
 
-    const docRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
-    const unsub = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        setStreakData({
-          currentStreak: d.currentStreak ?? 0,
-          longestStreak: d.longestStreak ?? 0,
-          lastActiveDate: d.lastActiveDate || '',
+    const pageRef = doc(db, 'users', user.uid, 'pages', pageId);
+    let unsubStats: (() => void) | null = null;
+
+    const unsubPage = onSnapshot(pageRef, (pageSnap) => {
+      if (unsubStats) {
+        unsubStats();
+        unsubStats = null;
+      }
+
+      if (pageSnap.exists() && pageSnap.data().type === 'habit') {
+        const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+        unsubStats = onSnapshot(statsRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const d = docSnap.data();
+            setStreakData({
+              currentStreak: d.currentStreak ?? 0,
+              longestStreak: d.longestStreak ?? 0,
+              lastActiveDate: d.lastActiveDate || '',
+            });
+          } else {
+            setStreakData({ currentStreak: 0, longestStreak: 0 });
+          }
+        }, () => {
+          setStreakData(null);
         });
       } else {
-        setStreakData({ currentStreak: 0, longestStreak: 0 });
+        setStreakData(null);
       }
     }, () => {
-      // ignore
+      setStreakData(null);
     });
 
-    return () => unsub();
+    return () => {
+      unsubPage();
+      if (unsubStats) unsubStats();
+    };
   }, [user, pathname]);
 
   useEffect(() => {

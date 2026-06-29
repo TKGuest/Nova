@@ -8,6 +8,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { PageModel } from '../../../types';
 import { WordEditor } from '@/components/editor/WordEditor';
 import { HabitTracker } from '@/components/habits/HabitTracker';
+import { ReminderView } from '@/components/reminders/ReminderView';
 import { Loader2 } from 'lucide-react';
 import { CoverImage } from '@/components/ui/CoverImage';
 
@@ -64,8 +65,10 @@ export default function DynamicPage() {
           <div className="min-h-0">
             {pageMeta.type === 'note' ? (
               <WordEditor key={pageId} pageId={pageId} />
-            ) : (
+            ) : pageMeta.type === 'habit' ? (
               <HabitTracker key={pageId} pageId={pageId} />
+            ) : (
+              <ReminderView key={pageId} pageId={pageId} />
             )}
           </div>
         </div>

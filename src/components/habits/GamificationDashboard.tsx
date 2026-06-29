@@ -33,7 +33,11 @@ export function GamificationDashboard({
     const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
     const unsubStats = onSnapshot(statsRef, (docSnap) => {
       if (docSnap.exists()) {
-        setStats(docSnap.data() as HabitStats);
+        const d = docSnap.data();
+        setStats(d as HabitStats);
+        if (d.activeTimerEndTime && d.activeTimerEndTime > Date.now()) {
+          setActiveTimer(d.activeTimerEndTime);
+        }
       } else {
         // Init default stats
         const defaultStats: HabitStats = {
@@ -116,6 +120,11 @@ export function GamificationDashboard({
       if (diff <= 0) {
         setTimeLeft('');
         setActiveTimer(null);
+        // Clean from Firestore as well
+        if (user && pageId) {
+          const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+          updateDoc(statsRef, { activeTimerEndTime: null, activeTimerName: null }).catch(() => {});
+        }
       } else {
         const totalSecs = Math.floor(diff / 1000);
         const mins = Math.floor(totalSecs / 60);
@@ -178,12 +187,23 @@ export function GamificationDashboard({
     const endTime = Date.now() + durationMs;
     setActiveTimer(endTime);
 
+    // Persist to stats doc so the sync engine / service worker gets it
+    const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+    await updateDoc(statsRef, {
+      activeTimerEndTime: endTime,
+      activeTimerName: item.name
+    });
+
     const checkFinished = setTimeout(() => {
       setActiveTimer(null);
       new Notification("Focus Session Complete!", {
-        body: "Your gamification timer has finished.",
+        body: `Your focus item "${item.name}" timer has finished.`,
         icon: "/icon-192x192.png" 
       });
+      updateDoc(statsRef, {
+        activeTimerEndTime: null,
+        activeTimerName: null
+      }).catch(() => {});
     }, durationMs);
   };
 
