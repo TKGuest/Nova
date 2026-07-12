@@ -1687,11 +1687,11 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                   </div>
                   <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
                     <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Weekly Reset Day</span>
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between bg-[#111] border border-[#2d2d2d] rounded px-3 py-2">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">Reset On</span>
+                    <div className="flex flex-col gap-1.5 w-fit">
+                      <div className="flex items-center gap-3 bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 cursor-pointer hover:border-purple-500/50 transition-all">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Reset On</span>
                         <select
-                          className="bg-transparent text-right outline-none text-white text-[11px] font-medium cursor-pointer"
+                          className="bg-transparent text-left outline-none text-white text-[10px] font-black uppercase tracking-widest cursor-pointer pr-1"
                           value={gamificationStats?.weeklyResetDay ?? 1}
                           onChange={async (e) => {
                             if (!user) return;
@@ -1700,13 +1700,13 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             await updateDoc(statsRef, { weeklyResetDay: nextVal });
                           }}
                         >
-                          <option value={1} className="bg-[#1e1e1e]">Monday</option>
-                          <option value={2} className="bg-[#1e1e1e]">Tuesday</option>
-                          <option value={3} className="bg-[#1e1e1e]">Wednesday</option>
-                          <option value={4} className="bg-[#1e1e1e]">Thursday</option>
-                          <option value={5} className="bg-[#1e1e1e]">Friday</option>
-                          <option value={6} className="bg-[#1e1e1e]">Saturday</option>
-                          <option value={0} className="bg-[#1e1e1e]">Sunday</option>
+                          <option value={1} className="bg-[#1e1e1e] text-white">MONDAY</option>
+                          <option value={2} className="bg-[#1e1e1e] text-white">TUESDAY</option>
+                          <option value={3} className="bg-[#1e1e1e] text-white">WEDNESDAY</option>
+                          <option value={4} className="bg-[#1e1e1e] text-white">THURSDAY</option>
+                          <option value={5} className="bg-[#1e1e1e] text-white">FRIDAY</option>
+                          <option value={6} className="bg-[#1e1e1e] text-white">SATURDAY</option>
+                          <option value={0} className="bg-[#1e1e1e] text-white">SUNDAY</option>
                         </select>
                       </div>
                       <span className="text-[9px] text-gray-600 leading-normal block">Decides which day of the week your weekly tasks reset.</span>
@@ -1776,6 +1776,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             <ScheduleDashboard 
               pageId={pageId}
               daysSorting={daysSorting}
+              weeklyResetDay={gamificationStats?.weeklyResetDay ?? 1}
               onClose={() => setIsScheduleOpen(false)}
             />
           ) : isPeek && sidePeekRecordId ? (
