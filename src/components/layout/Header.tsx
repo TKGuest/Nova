@@ -112,9 +112,9 @@ export function Header() {
         </Link>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* UTC Clock */}
-        <div className="flex items-center gap-2 px-3 py-1 bg-[#252526] border border-[#3e3e3e] rounded-md shadow-sm">
+       <div className="flex items-center gap-2 sm:gap-4">
+        {/* UTC Clock - Hidden on Mobile */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-[#252526] border border-[#3e3e3e] rounded-md shadow-sm">
           <Globe size={14} className="text-blue-400" />
           <span className="text-[11px] font-bold text-gray-300 font-mono tracking-wider">
             {now.toUTCString().split(' ')[4]} UTC
@@ -124,12 +124,12 @@ export function Header() {
         {/* Streak Badge */}
         {streakData && (
           <div 
-            className="flex items-center gap-1.5 px-3 py-1 bg-[#252526] border border-[#3e3e3e] rounded-md text-[11px] font-black uppercase tracking-wider relative group/flame cursor-help select-none shrink-0"
+            className="flex items-center gap-1 px-2 py-0.5 sm:px-3 sm:py-1 bg-[#252526] border border-[#3e3e3e] rounded-md text-[10px] sm:text-[11px] font-black uppercase tracking-wider relative group/flame cursor-help select-none shrink-0"
           >
-            <span className={`text-[12px] md:text-[14px] leading-none transition-all ${streakData.currentStreak > 0 ? 'text-amber-500 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'text-zinc-600'}`}>
+            <span className={`text-[11px] sm:text-[14px] leading-none transition-all ${streakData.currentStreak > 0 ? 'text-amber-500 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'text-zinc-600'}`}>
               🔥
             </span>
-            <span className={`font-mono text-[11px] font-black ${streakData.currentStreak > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
+            <span className={`font-mono text-[10px] sm:text-[11px] font-black ${streakData.currentStreak > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
               {streakData.currentStreak}
             </span>
             
@@ -141,12 +141,12 @@ export function Header() {
         )}
 
         {/* Countdown Module */}
-        <div className="flex flex-col items-end min-w-[120px]">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-gray-500">Next Reset In</span>
+        <div className="flex flex-col items-end min-w-[80px] sm:min-w-[120px]">
+          <div className="flex items-center gap-1 sm:gap-2 mb-0.5">
+            <span className="text-[8px] sm:text-[9px] font-black text-gray-500 uppercase tracking-widest">Reset</span>
             <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse shadow-[0_0_8px_rgba(234,179,8,0.5)]" />
           </div>
-          <div className="text-base font-black text-white font-mono tracking-[0.2em]">
+          <div className="text-xs sm:text-base font-black text-white font-mono tracking-wider sm:tracking-[0.2em]">
             {getCountdown()}
           </div>
         </div>

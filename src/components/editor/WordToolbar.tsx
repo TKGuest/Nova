@@ -1,46 +1,148 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Editor } from '@tiptap/react';
 import { 
   Bold, Italic, Underline, Strikethrough, 
   Palette, Highlighter, Type, 
   List, ListOrdered, AlignLeft, 
   AlignCenter, AlignRight, Eraser, 
-  Superscript, Subscript, Square, CheckSquare, Play
+  Superscript, Subscript, Square, CheckSquare, Play,
+  ChevronDown
 } from 'lucide-react';
 import { ColorDropdown } from './EditorUtils';
 
-export function WordToolbar({ editor }: { editor: Editor }) {
+const PRESET_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
+
+export function WordToolbar({ 
+  editor,
+  defaultFontFamily = 'Arial',
+  defaultFontSize = '16',
+  onDefaultFontFamilyChange,
+  onDefaultFontSizeChange
+}: { 
+  editor: Editor;
+  defaultFontFamily?: string;
+  defaultFontSize?: string;
+  onDefaultFontFamilyChange?: (font: string) => void;
+  onDefaultFontSizeChange?: (size: string) => void;
+}) {
   if (!editor) return null;
+
+  const [showPresets, setShowPresets] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Derive the active font family and font size from current editor state
+  const activeFontFamily = editor.getAttributes('textStyle').fontFamily || defaultFontFamily;
+  let activeFontSize = editor.getAttributes('textStyle').fontSize || '';
+  if (activeFontSize && typeof activeFontSize === 'string' && activeFontSize.endsWith('px')) {
+    activeFontSize = activeFontSize.replace('px', '');
+  }
+  if (!activeFontSize) {
+    activeFontSize = defaultFontSize;
+  }
+
+  const [inputValue, setInputValue] = useState(activeFontSize);
+
+  // Sync state whenever the editor's active selection style changes
+  useEffect(() => {
+    setInputValue(activeFontSize);
+  }, [activeFontSize]);
+
+  // Handle clicking outside the custom font-size combobox dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowPresets(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleFontFamilyChange = (font: string) => {
+    const { from, to } = editor.state.selection;
+    const hasSelection = from !== to;
+    editor.chain().focus().setFontFamily(font).run();
+    if (!hasSelection) {
+      onDefaultFontFamilyChange?.(font);
+    }
+  };
+
+  const handleFontSizeChange = (size: string) => {
+    if (!size || isNaN(Number(size))) return;
+    const { from, to } = editor.state.selection;
+    const hasSelection = from !== to;
+    editor.chain().focus().setMark('textStyle', { fontSize: `${size}px` }).run();
+    if (!hasSelection) {
+      onDefaultFontSizeChange?.(size);
+    }
+  };
 
   return (
     <div className="sticky top-0 z-[100] bg-[#252526] border-b border-[#3e3e3e] flex flex-col p-1 select-none shadow-md">
       {/* Top Row: Font & Size */}
       <div className="flex items-center gap-2 px-2 py-1">
         <select 
-          onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
-          defaultValue="Arial"
-          className="bg-[#1e1e1e] border border-[#3e3e3e] rounded px-1 py-0.5 text-xs text-gray-300 min-w-[140px] outline-none hover:border-gray-500"
+          onChange={(e) => handleFontFamilyChange(e.target.value)}
+          value={activeFontFamily}
+          className="bg-[#1e1e1e] border border-[#3e3e3e] rounded px-1.5 py-0.5 text-xs text-gray-300 min-w-[140px] outline-none hover:border-gray-500 focus:border-purple-500 transition-colors cursor-pointer"
         >
           <option value="Arial">Arial</option>
-          <option value="Calibri">Calibri (Body)</option>
+          <option value="Calibri">Calibri</option>
           <option value="Times New Roman">Times New Roman</option>
           <option value="Courier New">Courier New</option>
           <option value="Georgia">Georgia</option>
         </select>
         
-        <input 
-          type="number"
-          defaultValue={11}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              const val = (e.target as HTMLInputElement).value;
-              editor.chain().focus().setMark('textStyle', { fontSize: `${val}px` }).run();
-            }
-          }}
-          className="bg-[#1e1e1e] border border-[#3e3e3e] rounded px-1 py-0.5 text-xs text-gray-300 w-[50px] outline-none hover:border-gray-500"
-        />
+        <div ref={dropdownRef} className="relative flex items-center">
+          <input 
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleFontSizeChange(inputValue);
+                editor.commands.focus();
+              }
+            }}
+            onBlur={() => {
+              handleFontSizeChange(inputValue);
+            }}
+            className="bg-[#1e1e1e] border border-[#3e3e3e] border-r-0 rounded-l px-1.5 py-0.5 text-xs text-gray-300 w-[38px] text-center outline-none hover:border-gray-500 focus:border-purple-500 transition-colors"
+            title="Font Size"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPresets(!showPresets)}
+            className="bg-[#1e1e1e] border border-[#3e3e3e] hover:bg-[#2d2d30] rounded-r px-1 py-1 text-gray-400 hover:text-white transition-colors h-[24px] flex items-center justify-center border-l-0 outline-none cursor-pointer"
+            title="Select Font Size Preset"
+          >
+            <ChevronDown size={12} />
+          </button>
+
+          {showPresets && (
+            <div className="absolute top-full left-0 mt-1 w-[58px] bg-[#1c1c1e] border border-[#2d2d30] rounded shadow-2xl z-[200] max-h-48 overflow-y-auto custom-scrollbar">
+              {PRESET_SIZES.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => {
+                    setInputValue(size.toString());
+                    handleFontSizeChange(size.toString());
+                    setShowPresets(false);
+                    editor.commands.focus();
+                  }}
+                  className={`w-full text-left px-2 py-1 text-xs hover:bg-purple-500/20 hover:text-white transition-colors cursor-pointer ${
+                    activeFontSize === size.toString() ? 'bg-purple-500/10 text-purple-400 font-bold' : 'text-gray-300'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="w-[1px] h-6 bg-[#3e3e3e] mx-1" />
         

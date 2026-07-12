@@ -33,6 +33,12 @@
         },
         "deletedAt": {
           "type": "integer"
+        },
+        "defaultFontFamily": {
+          "type": "string"
+        },
+        "defaultFontSize": {
+          "type": "string"
         }
       },
       "required": ["id", "title"]

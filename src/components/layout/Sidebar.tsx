@@ -365,7 +365,13 @@ export function Sidebar() {
                           )}
                        </div>
                        <div className="p-3 flex items-center gap-2 flex-1 bg-[#222]">
-                          {page.type === 'note' ? <FileText size={18} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={18} className="text-gray-400 shrink-0" />}
+                          {page.type === 'note' ? (
+                            <FileText size={18} className="text-gray-400 shrink-0" />
+                          ) : page.type === 'habit' ? (
+                            <CalendarCheck2 size={18} className="text-[#51b151] shrink-0" />
+                          ) : (
+                            <Bell size={18} className="text-purple-400 shrink-0" />
+                          )}
                           <span className="font-bold text-[13px] text-gray-200 truncate">{page.title}</span>
                        </div>
                      </Link>
@@ -385,7 +391,13 @@ export function Sidebar() {
                          href={`/page/${page.id}`}
                          className="flex items-center gap-4 py-3.5 px-2 active:bg-[#2a2a2b] rounded-xl transition-colors"
                        >
-                         {page.type === 'note' ? <FileText size={22} className="text-gray-400 shrink-0" /> : <CalendarCheck2 size={22} className="text-[#51b151] shrink-0" />}
+                         {page.type === 'note' ? (
+                           <FileText size={22} className="text-gray-400 shrink-0" />
+                         ) : page.type === 'habit' ? (
+                           <CalendarCheck2 size={22} className="text-[#51b151] shrink-0" />
+                         ) : (
+                           <Bell size={22} className="text-purple-400 shrink-0" />
+                         )}
                          <span className="font-bold text-[16px] text-gray-100 flex-1 truncate">{page.title}</span>
                        </Link>
                     ))}

@@ -10,6 +10,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle } from '@tiptap/extension-text-style';
 import FontFamily from '@tiptap/extension-font-family';
+import { FontSize } from './FontSizeExtension';
 import { Color } from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -37,6 +38,8 @@ interface WordEditorProps {
 export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
   const { user } = useAuth();
   const [allPages, setAllPages] = useState<any[]>([]);
+  const [defaultFontFamily, setDefaultFontFamily] = useState('Arial');
+  const [defaultFontSize, setDefaultFontSize] = useState('16');
   const [editorMentionState, setEditorMentionState] = useState<{
     isOpen: boolean;
     textBeforeMention: string;
@@ -46,12 +49,37 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
 
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  const handleDefaultFontFamilyChange = async (font: string) => {
+    if (!user || !pageId) return;
+    setDefaultFontFamily(font);
+    try {
+      await updateDoc(doc(db, 'users', user.uid, 'pages', pageId), {
+        defaultFontFamily: font
+      });
+    } catch (err) {
+      console.error("Failed to update default font:", err);
+    }
+  };
+
+  const handleDefaultFontSizeChange = async (size: string) => {
+    if (!user || !pageId) return;
+    setDefaultFontSize(size);
+    try {
+      await updateDoc(doc(db, 'users', user.uid, 'pages', pageId), {
+        defaultFontSize: size
+      });
+    } catch (err) {
+      console.error("Failed to update default font size:", err);
+    }
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit,
       Underline,
       TextStyle,
       FontFamily,
+      FontSize,
       Color,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({
@@ -236,6 +264,12 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
     const unsub = onSnapshot(doc(db, 'users', user.uid, 'pages', pageId), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
+        if (data.defaultFontFamily) {
+          setDefaultFontFamily(data.defaultFontFamily);
+        }
+        if (data.defaultFontSize) {
+          setDefaultFontSize(data.defaultFontSize);
+        }
         // Only update if not focused and content differs significantly
         // This prevents 'locking' when the editor briefly loses focus
         if (!editor.isFocused && !saveTimeout.current && data.content !== editor.getHTML()) {
@@ -254,7 +288,13 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
 
   return (
     <div className="flex flex-col bg-[#1e1e1e] tiptap-editor relative">
-      <WordToolbar editor={editor} />
+      <WordToolbar 
+        editor={editor} 
+        defaultFontFamily={defaultFontFamily}
+        defaultFontSize={defaultFontSize}
+        onDefaultFontFamilyChange={handleDefaultFontFamilyChange}
+        onDefaultFontSizeChange={handleDefaultFontSizeChange}
+      />
       
       {editorMentionState && editorMentionState.isOpen && (() => {
         const coords = getCursorCoords();
@@ -346,13 +386,15 @@ export function WordEditor({ pageId, isPeek = false }: WordEditorProps) {
           <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={`p-1.5 rounded hover:bg-[#3a3a3a] ${editor.isActive({ textAlign: 'center' }) ? 'text-blue-400 bg-[#3a3a3a]' : 'text-gray-300'}`}><AlignCenter size={14}/></button>
           <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={`p-1.5 rounded hover:bg-[#3a3a3a] ${editor.isActive({ textAlign: 'right' }) ? 'text-blue-400 bg-[#3a3a3a]' : 'text-gray-300'}`}><AlignRight size={14}/></button>
         </SafeBubbleMenu>
-        <EditorContent editor={editor} className="outline-none text-gray-200 text-lg leading-relaxed min-h-full" />
+        <EditorContent editor={editor} className="outline-none text-gray-200 leading-relaxed min-h-full" />
       </div>
 
       <style>{`
         .ProseMirror {
           outline: none !important;
           min-height: 500px;
+          font-family: "${defaultFontFamily}", sans-serif;
+          font-size: ${defaultFontSize}px;
         }
         .ProseMirror p.is-editor-empty:first-child::before {
           content: attr(data-placeholder);

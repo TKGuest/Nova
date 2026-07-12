@@ -112,6 +112,7 @@ import { CoverImage } from '@/components/ui/CoverImage';
 import { GamificationDashboard } from './GamificationDashboard';
 import { WeeklyTasksDashboard } from './WeeklyTasksDashboard';
 import { TodoDashboard } from './TodoDashboard';
+import { ScheduleDashboard } from './ScheduleDashboard';
 import { playAscendingFanfare, playDing } from '@/lib/sounds';
 
 type PropertyType = 'habit' | 'counter' | 'notes' | 'toggle_list' | 'task_counter';
@@ -133,6 +134,7 @@ export interface MasterTask {
   bonusRequirement?: 'all_subtasks' | 'main_task';
   subTaskPoints?: number;
   bonusPoints?: number;
+  sevenDayBonusPoints?: number;
   // Toggle List styling
   labelColor?: string;
   labelBold?: boolean;
@@ -194,6 +196,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   const [isGamificationOpen, setIsGamificationOpen] = useState(false);
   const [isWeeklyTasksOpen, setIsWeeklyTasksOpen] = useState(false);
   const [isTodoOpen, setIsTodoOpen] = useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [gamificationStats, setGamificationStats] = useState<HabitStats | null>(null);
 
   const currentStreak = gamificationStats?.currentStreak ?? 0;
@@ -683,6 +686,72 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     return { points: finalPoints, bonusAwarded: nextBonusAwarded };
   };
 
+  const checkSevenDayPerfectWeekBonus = async (
+    taskId: string,
+    recordDate: string,
+    nextRecordData: Record<string, boolean | number>,
+    currentPoints: number,
+    stats: any
+  ) => {
+    const task = masterTasks.find(t => t.id === taskId);
+    if (!task || !task.sevenDayBonusPoints || task.sevenDayBonusPoints <= 0) {
+      return { points: currentPoints, announcement: '' };
+    }
+
+    const resetDay = stats.weeklyResetDay ?? 1;
+    const cardDate = parseISO(recordDate);
+    const startOfWeekObj = getStartOfWeekDate(cardDate, resetDay);
+    const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
+    const weeklyRecordId = `rec_week_${weekStr}`;
+    const weeklyRecordRef = doc(db, 'users', user!.uid, 'pages', pageId, 'weekly_records', weeklyRecordId);
+    
+    // Fetch current awarded status
+    const weeklyRecordSnap = await getDoc(weeklyRecordRef);
+    let perfectAttendanceAwarded: Record<string, boolean> = {};
+    if (weeklyRecordSnap.exists()) {
+      perfectAttendanceAwarded = weeklyRecordSnap.data()?.perfectAttendanceAwarded || {};
+    }
+
+    const sevenDayBonus = task.sevenDayBonusPoints;
+
+    // Count completions of taskId for this week
+    const weekDays = Array.from({ length: 7 }, (_, i) => format(addDays(startOfWeekObj, i), 'yyyy-MM-dd'));
+    let completionsCount = 0;
+    weekDays.forEach(dayStr => {
+      if (dayStr === recordDate) {
+        if (nextRecordData[taskId] === true) {
+          completionsCount++;
+        }
+      } else {
+        const dayRecord = records.find(r => r.date === dayStr);
+        if (dayRecord?.data?.[taskId] === true) {
+          completionsCount++;
+        }
+      }
+    });
+
+    let perfectAttendanceUpdated = { ...perfectAttendanceAwarded };
+    let finalPoints = currentPoints;
+    let announcement = '';
+
+    const wasAwarded = !!perfectAttendanceAwarded[taskId];
+    const isEligible = completionsCount === 7;
+
+    if (isEligible && !wasAwarded) {
+      finalPoints += sevenDayBonus;
+      perfectAttendanceUpdated[taskId] = true;
+      announcement = `✨ Perfect Attendance Bonus for "${task.name}"! +${sevenDayBonus} pts!`;
+      await setDoc(weeklyRecordRef, { perfectAttendanceAwarded: perfectAttendanceUpdated }, { merge: true });
+    } else if (!isEligible && wasAwarded) {
+      finalPoints -= sevenDayBonus;
+      perfectAttendanceUpdated[taskId] = false;
+      announcement = `Perfect Attendance for "${task.name}" canceled (-${sevenDayBonus} pts)`;
+      await setDoc(weeklyRecordRef, { perfectAttendanceAwarded: perfectAttendanceUpdated }, { merge: true });
+    }
+
+    return { points: finalPoints, announcement };
+  };
+
   const toggleCompletion = async (recordId: string, taskId: string, current: boolean) => {
     if (!user) return;
     const task = masterTasks.find(t => t.id === taskId);
@@ -779,6 +848,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         // Check Completed All Habits Daily Bonus
         const { points: finalPoints, bonusAwarded } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
         
+        // Check 7-Day Perfect Attendance Bonus
+        const { points: pointsAfterWeekly, announcement: weeklyBonusAnnouncement } = await checkSevenDayPerfectWeekBonus(taskId, record.date, nextRecordData, finalPoints, stats);
+
         await updateDoc(recordRef, { 
           data: nextRecordData,
           allHabitsBonusAwarded: bonusAwarded
@@ -813,10 +885,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         }
 
         const statsUpdates: any = { 
-          points: finalPoints,
+          points: pointsAfterWeekly,
           pointsEarnedToday,
           lastPointGainDate: todayStr,
-          debt: finalPoints < 0,
+          debt: pointsAfterWeekly < 0,
           taskStreaks,
           currentStreak: currentST,
           longestStreak: longestST,
@@ -829,6 +901,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         if (streakExtended) {
           playAscendingFanfare();
           showToast(`🔥 Streak Extended! ${currentST} Days!`, "success");
+        }
+
+        if (weeklyBonusAnnouncement) {
+          showToast(weeklyBonusAnnouncement, "success");
         }
 
         if (isCompleted) {
@@ -1074,6 +1150,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     // Check Completed All Habits Daily Bonus
     const { points: finalPoints, bonusAwarded } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
     
+    // Check 7-Day Perfect Attendance Bonus
+    const { points: pointsAfterWeekly, announcement: weeklyBonusAnnouncement } = await checkSevenDayPerfectWeekBonus(taskId, record.date, nextRecordData, finalPoints, stats);
+
     let currentST = stats.currentStreak ?? 0;
     let longestST = stats.longestStreak ?? 0;
     let lastActive = stats.lastActiveDate || "";
@@ -1100,10 +1179,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     }
 
     const statsUpdates: any = {
-      points: finalPoints,
+      points: pointsAfterWeekly,
       pointsEarnedToday,
       lastPointGainDate: todayStr,
-      debt: finalPoints < 0,
+      debt: pointsAfterWeekly < 0,
       taskStreaks,
       currentStreak: currentST,
       longestStreak: longestST,
@@ -1122,6 +1201,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (streakExtended) {
       playAscendingFanfare();
       showToast(`🔥 Streak Extended! ${currentST} Days!`, "success");
+    }
+
+    if (weeklyBonusAnnouncement) {
+      showToast(weeklyBonusAnnouncement, "success");
     }
 
     if (actualGain > 0) {
@@ -1479,16 +1562,17 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       <div className={`w-full flex flex-col bg-[#0a0a0a] ${isPeek ? 'h-full max-h-full overflow-y-auto py-4 px-6' : 'py-4 px-4 md:px-10'}`}>
         {/* Header - Hidden in focused peek mode to save space */}
         {!(isPeek && sidePeekRecordId) && (
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-[#1a1a1a]">
-          <div className="flex items-center gap-2">
-            <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 bg-[#2383e2] text-white rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10 shrink-0"><Plus size={14}/> New</button>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-[#1a1a1a] w-full overflow-hidden">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 w-screen md:w-auto shrink-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-1.5 px-3 py-2 bg-[#2383e2] text-white rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10 shrink-0"><Plus size={14}/> New</button>
             <button 
               onClick={() => {
                 setIsGamificationOpen(!isGamificationOpen);
                 setIsWeeklyTasksOpen(false);
                 setIsTodoOpen(false);
+                setIsScheduleOpen(false);
               }} 
-              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isGamificationOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isGamificationOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
             >
               <Gamepad2 size={14}/> Gamify
             </button>
@@ -1498,8 +1582,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 setIsWeeklyTasksOpen(!isWeeklyTasksOpen);
                 setIsGamificationOpen(false);
                 setIsTodoOpen(false);
+                setIsScheduleOpen(false);
               }} 
-              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isWeeklyTasksOpen ? 'bg-blue-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-blue-400 border-blue-900/30'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isWeeklyTasksOpen ? 'bg-blue-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-blue-400 border-blue-900/30'}`}
             >
               <CalendarIcon size={14}/> Weekly Tasks
             </button>
@@ -1509,16 +1594,29 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 setIsTodoOpen(!isTodoOpen);
                 setIsGamificationOpen(false);
                 setIsWeeklyTasksOpen(false);
+                setIsScheduleOpen(false);
               }} 
-              className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isTodoOpen ? 'bg-indigo-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-indigo-400 border-indigo-900/30'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isTodoOpen ? 'bg-indigo-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-indigo-400 border-indigo-900/30'}`}
             >
               <Check size={14}/> To-Do
             </button>
 
-            <div className="relative">
+            <button 
+              onClick={() => {
+                setIsScheduleOpen(!isScheduleOpen);
+                setIsGamificationOpen(false);
+                setIsWeeklyTasksOpen(false);
+                setIsTodoOpen(false);
+              }} 
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isScheduleOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
+            >
+              <Timer size={14}/> Schedule
+            </button>
+
+            <div className="relative shrink-0">
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }}
-                className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-1.5 md:py-2.5 rounded-md text-[9px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isSettingsOpen ? 'bg-[#222] text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isSettingsOpen ? 'bg-[#222] text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
               >
                 <Settings size={14}/> Settings
               </button>
@@ -1640,10 +1738,11 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 </div>
               )}
             </div>
-          </div>
-          <div className="flex bg-[#111] rounded-md p-0.5 md:p-1 border border-[#1a1a1a] shrink-0">
-            <button onClick={() => setViewMode('table')} className={`px-2 md:px-3.5 py-1.5 md:py-2 rounded flex items-center gap-1 md:gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-tighter ${viewMode === 'table' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><TableIcon size={12}/> Table</button>
-            <button onClick={() => setViewMode('card')} className={`px-2 md:px-3.5 py-1.5 md:py-2 rounded flex items-center gap-1 md:gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-tighter ${viewMode === 'card' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><LayoutGrid size={12}/> Card</button>
+
+            <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#1a1a1a] shrink-0 ml-auto md:ml-4">
+              <button onClick={() => setViewMode('table')} className={`px-2.5 py-1.5 rounded-md flex items-center gap-1 md:gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-tighter ${viewMode === 'table' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><TableIcon size={12}/> Table</button>
+              <button onClick={() => setViewMode('card')} className={`px-2.5 py-1.5 rounded-md flex items-center gap-1 md:gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-tighter ${viewMode === 'card' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><LayoutGrid size={12}/> Card</button>
+            </div>
           </div>
         </div>
         )}
@@ -1673,6 +1772,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                  onClose={() => setIsTodoOpen(false)}
                />
             </div>
+          ) : isScheduleOpen ? (
+            <ScheduleDashboard 
+              pageId={pageId}
+              daysSorting={daysSorting}
+              onClose={() => setIsScheduleOpen(false)}
+            />
           ) : isPeek && sidePeekRecordId ? (
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
               {records.filter(r => r.id === sidePeekRecordId).map(record => {
@@ -1742,61 +1847,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             ))}
                           </div>
                         </SortableContext>
-                      </div>
-
-                      {/* Weekly Tasks Section */}
-                      <div className="space-y-1 text-left pt-2 border-t border-[#1a1a1a]/50">
-                        <div className="flex items-center justify-between mb-4 px-1">
-                          <h3 className={`font-black uppercase text-gray-700 tracking-widest ${getSectionTitleClasses()}`}>Weekly Tasks</h3>
-                          <span className="text-[10px] text-gray-500 font-medium">Resets on {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][gamificationStats?.weeklyResetDay ?? 1]}</span>
-                        </div>
-                        <div className="space-y-0.5">
-                          {(() => {
-                            const resetDay = gamificationStats?.weeklyResetDay ?? 1;
-                            const startOfWeekObj = getStartOfWeekDate(dateObj, resetDay);
-                            const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
-                            const currentWeeklyRecord = weeklyRecords.find(wr => wr.date === weekStr);
-                            const weeklyTasks = masterTasks.filter(t => !t.parentId && t.period === 'weekly' && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes'));
-
-                            if (weeklyTasks.length === 0) {
-                              return <p className="text-xs text-gray-600 italic py-2 px-1">No weekly tasks configured.</p>;
-                            }
-
-                            return weeklyTasks.map(task => {
-                              const isCompleted = !!currentWeeklyRecord?.data?.[task.id];
-                              return (
-                                <SortableMasterItem 
-                                  key={task.id} 
-                                  id={`${record.id}::${task.id}`} 
-                                  task={task} 
-                                  allTasks={masterTasks}
-                                  allPages={allPages}
-                                  onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
-                                  onUpdateRecordNotes={(taskId: string, text: string) => {
-                                    if (!currentWeeklyRecord) return;
-                                    const wrRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'weekly_records', currentWeeklyRecord.id);
-                                    updateDoc(wrRef, { notes: text, [`data.notesMap.${taskId}`]: text });
-                                  }}
-                                  completed={isCompleted} 
-                                  recordData={currentWeeklyRecord?.data || {}}
-                                  isPeek={true}
-                                  streak={0}
-                                  onToggle={() => toggleWeeklyCompletion(record.date, task.id, isCompleted)} 
-                                  onToggleTask={(targetTaskId: string) => toggleWeeklyCompletion(record.date, targetTaskId, !!currentWeeklyRecord?.data?.[targetTaskId])}
-                                  onToggleSubTask={(subId: string, current: boolean) => {}}
-                                  onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => {}}
-                                  onAdjustCounter={(delta: number) => {}}
-                                  onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
-                                  isEditing={editingTaskId === task.id} 
-                                  onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
-                                  textSizeClass={textSize === 'large' ? 'text-[19px]' : textSize === 'medium' ? 'text-[17px]' : 'text-[15px]'} 
-                                  checkboxScale="scale-[1.15]" 
-                                  textTruncateMode={textTruncateMode}
-                                />
-                              );
-                            });
-                          })()}
-                        </div>
                       </div>
 
                       <button onClick={() => addMasterTask()} className="flex items-center gap-2 px-2 py-3 text-gray-700 hover:text-gray-400 text-[11px] font-bold uppercase tracking-widest transition-all mt-2 border-t border-[#1a1a1a]/50 w-full">
@@ -1901,58 +1951,6 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                     ))}
                                   </div>
                                 </SortableContext>
-
-                                {/* Weekly Tasks in Main Card */}
-                                {(() => {
-                                  const resetDay = gamificationStats?.weeklyResetDay ?? 1;
-                                  const startOfWeekObj = getStartOfWeekDate(dateObj, resetDay);
-                                  const weekStr = format(startOfWeekObj, 'yyyy-MM-dd');
-                                  const currentWeeklyRecord = weeklyRecords.find(wr => wr.date === weekStr);
-                                  const weeklyTasks = masterTasks.filter(t => !t.parentId && t.period === 'weekly' && (t.type === 'habit' || t.type === 'toggle_list' || t.type === 'task_counter' || t.type === 'notes'));
-
-                                  if (weeklyTasks.length === 0) return null;
-
-                                  return (
-                                    <div className="border-t border-[#1a1a1a] pt-1.5 mt-1">
-                                      <span className="text-[8px] font-black uppercase text-gray-500 tracking-wider mb-1 block">Weekly Tasks</span>
-                                      <div className="space-y-0">
-                                        {weeklyTasks.map(task => {
-                                          const isCompleted = !!currentWeeklyRecord?.data?.[task.id];
-                                          return (
-                                            <SortableMasterItem 
-                                              key={task.id} 
-                                              id={`${record.id}::${task.id}`} 
-                                              task={task} 
-                                              allTasks={masterTasks}
-                                              completed={isCompleted} 
-                                              recordData={currentWeeklyRecord?.data || {}}
-                                              isPeek={false}
-                                              allPages={allPages}
-                                              onUpdateMasterTask={(id: string, updates: any) => updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', id), updates)}
-                                              onUpdateRecordNotes={(taskId: string, text: string) => {
-                                                if (!currentWeeklyRecord) return;
-                                                const wrRef = doc(db, 'users', user?.uid || '', 'pages', pageId, 'weekly_records', currentWeeklyRecord.id);
-                                                updateDoc(wrRef, { notes: text, [`data.notesMap.${taskId}`]: text });
-                                              }}
-                                              streak={0}
-                                              onToggle={() => toggleWeeklyCompletion(record.date, task.id, isCompleted)} 
-                                              onToggleTask={(targetTaskId: string) => toggleWeeklyCompletion(record.date, targetTaskId, !!currentWeeklyRecord?.data?.[targetTaskId])}
-                                              onToggleSubTask={(subId: string, current: boolean) => {}}
-                                              onToggleSubTaskForTask={(targetTaskId: string, subId: string, current: boolean) => {}}
-                                              onAdjustCounter={(delta: number) => {}}
-                                              onContextMenu={(e: any) => { e.preventDefault(); setContextMenu({ x: e.pageX, y: e.pageY, taskId: task.id }); }} 
-                                              isEditing={editingTaskId === task.id} 
-                                              onRename={(newName: string) => { updateDoc(doc(db, 'users', user?.uid || '', 'pages', pageId, 'master_tasks', task.id), { name: newName }); setEditingTaskId(null); }} 
-                                              textSizeClass={getTextClasses()} 
-                                              checkboxScale={getCheckboxScale()} 
-                                              textTruncateMode={textTruncateMode}
-                                            />
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
                               </div>
                               <div className="mt-auto" />
                             </div>
@@ -1974,7 +1972,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 <thead>
                   <tr className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
                     <th className="p-4 font-black text-[9px] uppercase tracking-widest text-gray-600 border-r border-[#1a1a1a] w-[180px]">Date Record</th>
-                     {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter').map(task => {
+                     {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter' && t.period !== 'weekly').map(task => {
                        const streak = gamificationStats?.taskStreaks?.[task.id]?.streak || 0;
                        const isWeekly = task.period === 'weekly';
                        return (
@@ -2008,7 +2006,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             </span>
                           </div>
                         </td>
-                        {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter').map(task => {
+                        {masterTasks.filter(t => t.type !== 'notes' && t.type !== 'toggle_list' && t.type !== 'counter' && t.period !== 'weekly').map(task => {
                           const isWeekly = task.period === 'weekly';
                           const resetDay = gamificationStats?.weeklyResetDay ?? 1;
                           const startOfWeekObj = getStartOfWeekDate(parseISO(record.date), resetDay);
@@ -3036,7 +3034,7 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
           {/* Main Task Settings (Habits only) */}
           {task.type === 'habit' && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
                 {task.rewardMode === 'subtasks_separately' ? 'Main Task Completion Bonus' : 'Main Task Base Points'}
@@ -3060,6 +3058,18 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
                 <option value="main_only">Reward Main Task Only</option>
                 <option value="subtasks_separately">Reward Sub-Tasks Separately</option>
               </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">7-Day Perfect Week Bonus</span>
+              <input 
+                type="number" 
+                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                defaultValue={task.sevenDayBonusPoints || 0}
+                placeholder="0"
+                onBlur={(e) => onUpdate(task.id, { sevenDayBonusPoints: parseInt(e.target.value) || 0 })}
+                onWheel={(e) => e.currentTarget.blur()}
+              />
             </div>
           </div>
 
