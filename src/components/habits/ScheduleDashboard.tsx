@@ -14,9 +14,21 @@ interface ScheduleBlock {
   dayOfWeek: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   startTime: string; // "HH:MM"
   endTime: string;   // "HH:MM"
-  type: 'free' | 'normal' | 'important';
+  type: 'normal' | 'important';
+  color?: string;    // 'emerald' | 'purple' | 'blue' | 'indigo' | 'teal' | 'amber' | 'rose' | 'fuchsia'
   notes?: string;
 }
+
+const COLOR_PRESETS = [
+  { id: 'emerald', label: 'Emerald', bgClass: 'bg-emerald-500' },
+  { id: 'purple', label: 'Purple', bgClass: 'bg-purple-500' },
+  { id: 'blue', label: 'Blue', bgClass: 'bg-blue-500' },
+  { id: 'indigo', label: 'Indigo', bgClass: 'bg-indigo-500' },
+  { id: 'teal', label: 'Teal', bgClass: 'bg-teal-500' },
+  { id: 'amber', label: 'Amber', bgClass: 'bg-amber-500' },
+  { id: 'rose', label: 'Rose', bgClass: 'bg-rose-500' },
+  { id: 'fuchsia', label: 'Fuchsia', bgClass: 'bg-fuchsia-500' },
+] as const;
 
 const formatTimeStr = (time24: string, format12h: boolean): string => {
   if (!time24) return '';
@@ -338,7 +350,8 @@ export function ScheduleDashboard({
   const [dayOfWeek, setDayOfWeek] = useState(weeklyResetDay);
   const [startTime, setStartTime] = useState('06:00');
   const [endTime, setEndTime] = useState('07:00');
-  const [type, setType] = useState<'free' | 'normal' | 'important'>('normal');
+  const [type, setType] = useState<'normal' | 'important'>('normal');
+  const [color, setColor] = useState<string>('emerald');
 
   // Currently selected day in mobile/narrow view
   const [activeTabDay, setActiveTabDay] = useState<number>(new Date().getDay());
@@ -512,7 +525,8 @@ export function ScheduleDashboard({
       dayOfWeek,
       startTime,
       endTime,
-      type,
+      type: type === 'important' ? 'important' : 'normal',
+      color: color || (type === 'important' ? 'rose' : 'emerald'),
     };
 
     try {
@@ -542,6 +556,7 @@ export function ScheduleDashboard({
     setStartTime('06:00');
     setEndTime('07:00');
     setType('normal');
+    setColor('emerald');
     setIsAddingBlock(false);
     setEditingBlockId(null);
     setFormError(null);
@@ -552,7 +567,9 @@ export function ScheduleDashboard({
     setDayOfWeek(block.dayOfWeek);
     setStartTime(block.startTime);
     setEndTime(block.endTime);
-    setType(block.type);
+    const bType = block.type === 'important' ? 'important' : 'normal';
+    setType(bType);
+    setColor(block.color || (bType === 'important' ? 'rose' : 'emerald'));
     setEditingBlockId(block.id);
     setIsAddingBlock(true);
     setFormError(null);
@@ -569,31 +586,76 @@ export function ScheduleDashboard({
     }
   };
 
-  // Style helper based on time-block type
-  const getBlockStyle = (blockType: 'free' | 'normal' | 'important', isCurrent = false) => {
+  // Style helper based on time-block type & color
+  const getBlockStyle = (blockType: string, blockColor?: string, isCurrent = false) => {
     const activePulse = isCurrent ? 'ring-2 ring-offset-2 ring-offset-black animate-pulse' : '';
-    switch (blockType) {
-      case 'normal':
+    const chosenColor = blockColor || (blockType === 'important' ? 'rose' : 'emerald');
+
+    switch (chosenColor) {
+      case 'purple':
         return {
-          bg: 'bg-emerald-950/20 hover:bg-emerald-950/30 border-emerald-500/40 text-emerald-300',
-          badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
-          dot: 'bg-emerald-500',
-          ring: activePulse ? `${activePulse} ring-emerald-500` : '',
+          bg: 'bg-purple-950/25 hover:bg-purple-950/35 border-purple-500/40 text-purple-300',
+          badge: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+          bar: 'bg-purple-500',
+          ring: activePulse ? `${activePulse} ring-purple-500` : '',
+          text: 'text-purple-400'
         };
-      case 'important':
+      case 'blue':
         return {
-          bg: 'bg-rose-950/20 hover:bg-rose-950/30 border-rose-500/40 text-rose-300',
+          bg: 'bg-blue-950/25 hover:bg-blue-950/35 border-blue-500/40 text-blue-300',
+          badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+          bar: 'bg-blue-500',
+          ring: activePulse ? `${activePulse} ring-blue-500` : '',
+          text: 'text-blue-400'
+        };
+      case 'indigo':
+        return {
+          bg: 'bg-indigo-950/25 hover:bg-indigo-950/35 border-indigo-500/40 text-indigo-300',
+          badge: 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30',
+          bar: 'bg-indigo-500',
+          ring: activePulse ? `${activePulse} ring-indigo-500` : '',
+          text: 'text-indigo-400'
+        };
+      case 'amber':
+        return {
+          bg: 'bg-amber-950/25 hover:bg-amber-950/35 border-amber-500/40 text-amber-300',
+          badge: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
+          bar: 'bg-amber-500',
+          ring: activePulse ? `${activePulse} ring-amber-500` : '',
+          text: 'text-amber-400'
+        };
+      case 'rose':
+        return {
+          bg: 'bg-rose-950/25 hover:bg-rose-950/35 border-rose-500/40 text-rose-300',
           badge: 'bg-rose-500/20 text-rose-400 border border-rose-500/30',
-          dot: 'bg-rose-500',
+          bar: 'bg-rose-500',
           ring: activePulse ? `${activePulse} ring-rose-500` : '',
+          text: 'text-rose-400'
         };
-      case 'free':
+      case 'teal':
+        return {
+          bg: 'bg-teal-950/25 hover:bg-teal-950/35 border-teal-500/40 text-teal-300',
+          badge: 'bg-teal-500/20 text-teal-400 border border-teal-500/30',
+          bar: 'bg-teal-500',
+          ring: activePulse ? `${activePulse} ring-teal-500` : '',
+          text: 'text-teal-400'
+        };
+      case 'fuchsia':
+        return {
+          bg: 'bg-fuchsia-950/25 hover:bg-fuchsia-950/35 border-fuchsia-500/40 text-fuchsia-300',
+          badge: 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30',
+          bar: 'bg-fuchsia-500',
+          ring: activePulse ? `${activePulse} ring-fuchsia-500` : '',
+          text: 'text-fuchsia-400'
+        };
+      case 'emerald':
       default:
         return {
-          bg: 'bg-[#141414] hover:bg-[#1a1a1a] border-[#222] text-gray-300',
-          badge: 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400',
-          dot: 'bg-gray-500',
-          ring: activePulse ? `${activePulse} ring-gray-500` : '',
+          bg: 'bg-emerald-950/25 hover:bg-emerald-950/35 border-emerald-500/40 text-emerald-300',
+          badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
+          bar: 'bg-emerald-500',
+          ring: activePulse ? `${activePulse} ring-emerald-500` : '',
+          text: 'text-emerald-400'
         };
     }
   };
@@ -646,7 +708,7 @@ export function ScheduleDashboard({
             <div className="text-[11px] font-black uppercase tracking-widest">
               <span className="text-gray-500">Currently Happening: </span>
               {currentBlock ? (
-                <span className={`ml-1 font-extrabold ${currentBlock.type === 'normal' ? 'text-emerald-400' : currentBlock.type === 'important' ? 'text-rose-400' : 'text-gray-400'}`}>
+                <span className={`ml-1 font-extrabold ${getBlockStyle(currentBlock.type, currentBlock.color).text}`}>
                   {currentBlock.title} ({formatTimeStr(currentBlock.startTime, is12Hour)} – {formatTimeStr(currentBlock.endTime, is12Hour)})
                 </span>
               ) : (
@@ -731,23 +793,48 @@ export function ScheduleDashboard({
 
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Time Box Type</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(['free', 'normal', 'important'] as const).map((t) => (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['normal', 'important'] as const).map((t) => (
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setType(t)}
-                      className={`py-1.5 text-[9px] font-black uppercase rounded border transition-all cursor-pointer ${
+                      onClick={() => {
+                        setType(t);
+                        if (t === 'important' && color === 'emerald') setColor('rose');
+                        if (t === 'normal' && color === 'rose') setColor('emerald');
+                      }}
+                      className={`py-2 text-[9px] font-black uppercase rounded-lg border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         type === t
                           ? t === 'normal'
                             ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-md shadow-emerald-500/5'
-                            : t === 'important'
-                            ? 'bg-rose-500/20 text-rose-400 border-rose-500 shadow-md shadow-rose-500/5'
-                            : 'bg-gray-500/20 text-gray-400 border-gray-500 shadow-md shadow-gray-500/5'
+                            : 'bg-rose-500/20 text-rose-400 border-rose-500 shadow-md shadow-rose-500/5'
                           : 'bg-[#111] border-[#222] text-gray-500 hover:text-gray-300'
                       }`}
                     >
+                      <span className={`w-1.5 h-1.5 rounded-full ${t === 'normal' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                       {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Block Accent Color</label>
+                <div className="grid grid-cols-4 gap-2 pt-0.5">
+                  {COLOR_PRESETS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={c.label}
+                      onClick={() => setColor(c.id)}
+                      className={`py-1.5 px-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        color === c.id
+                          ? 'bg-[#1e1e1e] border-white text-white shadow-lg scale-[1.03]'
+                          : 'bg-[#111] border-[#222] text-gray-400 hover:text-gray-200 hover:bg-[#161616]'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${c.bgClass} shrink-0`} />
+                      <span className="truncate">{c.label}</span>
                     </button>
                   ))}
                 </div>
@@ -773,7 +860,11 @@ export function ScheduleDashboard({
           <div className="bg-[#111]/20 border border-[#1a1a1a]/60 rounded-xl p-4 text-[11px] leading-relaxed text-gray-500 space-y-2.5 mt-auto">
             <div className="flex gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
-              <p><strong className="text-rose-400 uppercase font-black tracking-wide text-[10px]">Important Time Box:</strong> Will notify you when they start!</p>
+              <p><strong className="text-rose-400 uppercase font-black tracking-wide text-[10px]">Important Time Box:</strong> Triggers a sound and notification alert when it starts!</p>
+            </div>
+            <div className="flex gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0 mt-1.5" />
+              <p><strong className="text-purple-400 uppercase font-black tracking-wide text-[10px]">Custom Colors:</strong> Customize each block's accent color for easy visual identification.</p>
             </div>
           </div>
         </div>
@@ -846,7 +937,7 @@ export function ScheduleDashboard({
                       {dayBlocks.length > 0 ? (
                         dayBlocks.map((block) => {
                           const isCurrent = currentTime && currentDayNum === day.value && currentTime >= block.startTime && currentTime < block.endTime;
-                          const bStyle = getBlockStyle(block.type, isCurrent);
+                          const bStyle = getBlockStyle(block.type, block.color, isCurrent);
 
                           return (
                             <div
@@ -854,7 +945,7 @@ export function ScheduleDashboard({
                               className={`group border rounded-lg p-2.5 flex flex-col gap-1.5 transition-all relative overflow-hidden ${bStyle.bg} ${bStyle.ring}`}
                             >
                               {/* Left status indicator line */}
-                              <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${block.type === 'normal' ? 'bg-emerald-500' : block.type === 'important' ? 'bg-rose-500' : 'bg-gray-700'}`} />
+                              <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${bStyle.bar}`} />
                               
                               <div className="flex items-start justify-between gap-2.5">
                                 <span className="text-[11.5px] font-extrabold tracking-wide text-white leading-snug">
@@ -930,14 +1021,14 @@ export function ScheduleDashboard({
                       {dayBlocks.length > 0 ? (
                         dayBlocks.map((block) => {
                           const isCurrent = currentTime && currentDayNum === day.value && currentTime >= block.startTime && currentTime < block.endTime;
-                          const bStyle = getBlockStyle(block.type, isCurrent);
+                          const bStyle = getBlockStyle(block.type, block.color, isCurrent);
 
                           return (
                             <div
                               key={block.id}
                               className={`border rounded-lg p-3.5 flex flex-col gap-2 relative overflow-hidden ${bStyle.bg} ${bStyle.ring}`}
                             >
-                              <div className={`absolute left-0 top-0 bottom-0 w-[4px] ${block.type === 'normal' ? 'bg-emerald-500' : block.type === 'important' ? 'bg-rose-500' : 'bg-gray-700'}`} />
+                              <div className={`absolute left-0 top-0 bottom-0 w-[4px] ${bStyle.bar}`} />
                               
                               <div className="flex items-start justify-between gap-4">
                                 <span className="text-[13px] font-black tracking-wide text-white">
