@@ -205,14 +205,14 @@ function TimePicker({
 }
 
 function DayOfWeekPicker({
-  value,
+  selectedDays,
   onChange,
   options,
   label
 }: {
-  value: number;
-  onChange: (val: number) => void;
-  options: { label: string; value: number }[];
+  selectedDays: number[];
+  onChange: (days: number[]) => void;
+  options: { label: string; short: string; value: number }[];
   label: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -228,7 +228,39 @@ function DayOfWeekPicker({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const selectedOption = options.find(o => o.value === value) || options[0];
+  const toggleDay = (dayVal: number) => {
+    if (selectedDays.includes(dayVal)) {
+      if (selectedDays.length === 1) return; // Keep at least one day selected
+      onChange(selectedDays.filter((d) => d !== dayVal));
+    } else {
+      onChange([...selectedDays, dayVal]);
+    }
+  };
+
+  const selectPreset = (preset: 'all' | 'weekdays' | 'weekends') => {
+    if (preset === 'all') {
+      onChange([0, 1, 2, 3, 4, 5, 6]);
+    } else if (preset === 'weekdays') {
+      onChange([1, 2, 3, 4, 5]);
+    } else if (preset === 'weekends') {
+      onChange([0, 6]);
+    }
+  };
+
+  // Generate label display text
+  const getDisplayText = () => {
+    if (selectedDays.length === 0) return 'Select Days';
+    if (selectedDays.length === options.length) return 'Every Day (All 7)';
+    if (selectedDays.length === 5 && [1, 2, 3, 4, 5].every((d) => selectedDays.includes(d))) return 'Weekdays (Mon-Fri)';
+    if (selectedDays.length === 2 && [0, 6].every((d) => selectedDays.includes(d))) return 'Weekends (Sat-Sun)';
+
+    // Sort selected days by their order in `options`
+    const sorted = options.filter((o) => selectedDays.includes(o.value));
+    if (sorted.length <= 3) {
+      return sorted.map((o) => o.label).join(', ');
+    }
+    return `${sorted.length} Days (${sorted.map((o) => o.short).join(', ')})`;
+  };
 
   return (
     <div className="relative w-full" ref={containerRef}>
@@ -238,35 +270,75 @@ function DayOfWeekPicker({
         onClick={() => setIsOpen(!isOpen)}
         className="w-full bg-[#111] border border-[#222] rounded-lg px-2.5 py-2 text-white font-bold text-xs text-left flex items-center justify-between hover:border-purple-500 hover:bg-[#151515] transition-all cursor-pointer select-none"
       >
-        <span>{selectedOption.label}</span>
+        <span className="truncate pr-1 text-white font-black">{getDisplayText()}</span>
         <ChevronDown size={11} className="text-gray-500 shrink-0 ml-1.5" />
       </button>
 
       {isOpen && (
         <div 
-          className="absolute left-0 right-0 mt-1 bg-[#141414] border border-[#2d2d2d] rounded-xl shadow-2xl p-1 z-[100] text-xs select-none max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#333] [&::-webkit-scrollbar-thumb]:rounded animate-fadeIn"
+          className="absolute left-0 right-0 mt-1 bg-[#141414] border border-[#2d2d2d] rounded-xl shadow-2xl p-2 z-[100] text-xs select-none max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#333] [&::-webkit-scrollbar-thumb]:rounded animate-fadeIn space-y-1.5"
           onClick={(e) => e.stopPropagation()}
         >
-          {options.map((opt) => {
-            const isSelected = opt.value === value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full py-2 px-3 text-left font-black text-[11px] rounded transition-all cursor-pointer ${
-                  isSelected 
-                    ? 'bg-purple-600 text-white' 
-                    : 'text-gray-400 hover:bg-[#222] hover:text-white'
-                }`}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
+          {/* Quick presets */}
+          <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-[#222]">
+            <button
+              type="button"
+              onClick={() => selectPreset('all')}
+              className="flex-1 py-1 px-1.5 text-[9px] font-black uppercase rounded bg-[#1f1f1f] text-gray-300 hover:text-white hover:bg-purple-600 transition-colors"
+            >
+              All 7
+            </button>
+            <button
+              type="button"
+              onClick={() => selectPreset('weekdays')}
+              className="flex-1 py-1 px-1.5 text-[9px] font-black uppercase rounded bg-[#1f1f1f] text-gray-300 hover:text-white hover:bg-purple-600 transition-colors"
+            >
+              Weekdays
+            </button>
+            <button
+              type="button"
+              onClick={() => selectPreset('weekends')}
+              className="flex-1 py-1 px-1.5 text-[9px] font-black uppercase rounded bg-[#1f1f1f] text-gray-300 hover:text-white hover:bg-purple-600 transition-colors"
+            >
+              Weekends
+            </button>
+          </div>
+
+          {/* List of days with checkboxes */}
+          <div className="space-y-0.5">
+            {options.map((opt) => {
+              const isSelected = selectedDays.includes(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleDay(opt.value)}
+                  className={`w-full py-1.5 px-2.5 text-left font-black text-[11px] rounded transition-all cursor-pointer flex items-center justify-between ${
+                    isSelected 
+                      ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30' 
+                      : 'text-gray-400 hover:bg-[#222] hover:text-white border border-transparent'
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                    isSelected ? 'bg-purple-600 border-purple-400 text-white' : 'border-[#444] bg-[#111]'
+                  }`}>
+                    {isSelected && <Check size={11} strokeWidth={3} />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="pt-1.5 border-t border-[#222] flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="px-3 py-1 bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider rounded-md hover:bg-purple-500 transition-colors cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -336,7 +408,8 @@ export function ScheduleDashboard({
 
   const handleAddClick = () => {
     if (!isAddingBlock) {
-      const { start, end } = getLatestBlockTimes(dayOfWeek, blocks);
+      const targetDay = selectedDays[0] ?? weeklyResetDay;
+      const { start, end } = getLatestBlockTimes(targetDay, blocks);
       setStartTime(start);
       setEndTime(end);
       setIsAddingBlock(true);
@@ -347,7 +420,7 @@ export function ScheduleDashboard({
 
   // Form states for adding/editing
   const [title, setTitle] = useState('');
-  const [dayOfWeek, setDayOfWeek] = useState(weeklyResetDay);
+  const [selectedDays, setSelectedDays] = useState<number[]>([weeklyResetDay]);
   const [startTime, setStartTime] = useState('06:00');
   const [endTime, setEndTime] = useState('07:00');
   const [type, setType] = useState<'normal' | 'important'>('normal');
@@ -496,12 +569,17 @@ export function ScheduleDashboard({
       return;
     }
 
+    if (selectedDays.length === 0) {
+      setFormError("Please select at least one day of the week");
+      return;
+    }
+
     if (startTime >= endTime) {
       setFormError("Start time must be strictly before end time");
       return;
     }
 
-    // Check overlap with another schedule
+    // Check overlap with another schedule block for any of the selected days
     const isOverlapping = (
       dayA: number, startA: string, endA: string,
       dayB: number, startB: string, endB: string
@@ -510,19 +588,21 @@ export function ScheduleDashboard({
       return startA < endB && startB < endA;
     };
 
-    const overlappingBlock = blocks.find((b) => {
-      if (editingBlockId && b.id === editingBlockId) return false;
-      return isOverlapping(dayOfWeek, startTime, endTime, b.dayOfWeek, b.startTime, b.endTime);
-    });
+    for (const d of selectedDays) {
+      const overlappingBlock = blocks.find((b) => {
+        if (editingBlockId && b.id === editingBlockId) return false;
+        return isOverlapping(d, startTime, endTime, b.dayOfWeek, b.startTime, b.endTime);
+      });
 
-    if (overlappingBlock) {
-      setFormError(`Time slot overlaps with "${overlappingBlock.title}" (${formatTimeStr(overlappingBlock.startTime, is12Hour)} - ${formatTimeStr(overlappingBlock.endTime, is12Hour)})`);
-      return;
+      if (overlappingBlock) {
+        const dayLabel = DAYS.find((dayObj) => dayObj.value === d)?.label || `Day ${d}`;
+        setFormError(`Time slot on ${dayLabel} overlaps with "${overlappingBlock.title}" (${formatTimeStr(overlappingBlock.startTime, is12Hour)} - ${formatTimeStr(overlappingBlock.endTime, is12Hour)})`);
+        return;
+      }
     }
 
-    const blockData = {
+    const baseBlockData = {
       title: title.trim(),
-      dayOfWeek,
       startTime,
       endTime,
       type: type === 'important' ? 'important' : 'normal',
@@ -531,17 +611,52 @@ export function ScheduleDashboard({
 
     try {
       if (editingBlockId) {
+        // Update the primary block
         await updateDoc(
           doc(db, 'users', user.uid, 'pages', pageId, 'schedule_blocks', editingBlockId),
-          blockData
+          {
+            ...baseBlockData,
+            dayOfWeek: selectedDays[0],
+          }
         );
-        showToast("Schedule block updated!", "success");
+
+        // If extra days selected while editing, create blocks for those extra days as well
+        if (selectedDays.length > 1) {
+          const extraDays = selectedDays.slice(1);
+          await Promise.all(
+            extraDays.map((d) =>
+              addDoc(
+                collection(db, 'users', user.uid, 'pages', pageId, 'schedule_blocks'),
+                {
+                  ...baseBlockData,
+                  dayOfWeek: d,
+                }
+              )
+            )
+          );
+          showToast(`Block updated & created on ${selectedDays.length} days!`, "success");
+        } else {
+          showToast("Schedule block updated!", "success");
+        }
       } else {
-        await addDoc(
-          collection(db, 'users', user.uid, 'pages', pageId, 'schedule_blocks'),
-          blockData
+        // Create new blocks for all selected days
+        await Promise.all(
+          selectedDays.map((d) =>
+            addDoc(
+              collection(db, 'users', user.uid, 'pages', pageId, 'schedule_blocks'),
+              {
+                ...baseBlockData,
+                dayOfWeek: d,
+              }
+            )
+          )
         );
-        showToast("New schedule block created!", "success");
+
+        if (selectedDays.length > 1) {
+          showToast(`Created ${selectedDays.length} schedule blocks!`, "success");
+        } else {
+          showToast("New schedule block created!", "success");
+        }
       }
 
       resetForm();
@@ -553,6 +668,7 @@ export function ScheduleDashboard({
 
   const resetForm = () => {
     setTitle('');
+    setSelectedDays([weeklyResetDay]);
     setStartTime('06:00');
     setEndTime('07:00');
     setType('normal');
@@ -564,7 +680,7 @@ export function ScheduleDashboard({
 
   const handleEditClick = (block: ScheduleBlock) => {
     setTitle(block.title);
-    setDayOfWeek(block.dayOfWeek);
+    setSelectedDays([block.dayOfWeek]);
     setStartTime(block.startTime);
     setEndTime(block.endTime);
     const bType = block.type === 'important' ? 'important' : 'normal';
@@ -761,17 +877,17 @@ export function ScheduleDashboard({
               </div>
 
               <DayOfWeekPicker
-                value={dayOfWeek}
-                onChange={(nextDay) => {
-                  setDayOfWeek(nextDay);
-                  if (!editingBlockId) {
-                    const { start, end } = getLatestBlockTimes(nextDay, blocks);
+                selectedDays={selectedDays}
+                onChange={(nextDays) => {
+                  setSelectedDays(nextDays);
+                  if (!editingBlockId && nextDays.length > 0) {
+                    const { start, end } = getLatestBlockTimes(nextDays[0], blocks);
                     setStartTime(start);
                     setEndTime(end);
                   }
                 }}
                 options={orderedDays}
-                label="Day of Week"
+                label="Days of Week"
               />
 
               <div className="grid grid-cols-2 gap-2">
@@ -820,21 +936,20 @@ export function ScheduleDashboard({
 
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Block Accent Color</label>
-                <div className="grid grid-cols-4 gap-2 pt-0.5">
+                <div className="flex items-center justify-between gap-1.5 pt-1">
                   {COLOR_PRESETS.map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       title={c.label}
                       onClick={() => setColor(c.id)}
-                      className={`py-1.5 px-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      className={`w-7 h-7 rounded-full transition-all cursor-pointer flex items-center justify-center shrink-0 ${
                         color === c.id
-                          ? 'bg-[#1e1e1e] border-white text-white shadow-lg scale-[1.03]'
-                          : 'bg-[#111] border-[#222] text-gray-400 hover:text-gray-200 hover:bg-[#161616]'
+                          ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0d0d0d] scale-110'
+                          : 'opacity-70 hover:opacity-100 hover:scale-105'
                       }`}
                     >
-                      <span className={`w-2 h-2 rounded-full ${c.bgClass} shrink-0`} />
-                      <span className="truncate">{c.label}</span>
+                      <span className={`w-full h-full rounded-full ${c.bgClass}`} />
                     </button>
                   ))}
                 </div>
@@ -851,7 +966,10 @@ export function ScheduleDashboard({
                 type="submit"
                 className="w-full py-2 bg-[#2383e2] hover:bg-opacity-90 text-white font-black text-[10px] uppercase tracking-widest rounded-lg transition-all shadow-md cursor-pointer"
               >
-                {editingBlockId ? 'Update Block' : 'Add to Schedule'}
+                {editingBlockId 
+                  ? (selectedDays.length > 1 ? `Update & Create for ${selectedDays.length} Days` : 'Update Block')
+                  : (selectedDays.length > 1 ? `Add to Schedule (${selectedDays.length} Blocks)` : 'Add to Schedule')
+                }
               </button>
             </form>
           )}
