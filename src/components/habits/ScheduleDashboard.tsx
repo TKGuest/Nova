@@ -6,7 +6,7 @@ import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, query, order
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useNotification } from '@/context/NotificationContext';
 import { playAscendingFanfare, playDing } from '@/lib/sounds';
-import { Clock, Plus, Trash2, Edit2, Check, X, Calendar, AlertCircle, Sparkles, Volume2, ArrowRight, GripVertical, ChevronDown } from 'lucide-react';
+import { Clock, Plus, Trash2, Edit2, Check, X, Calendar, AlertCircle, Sparkles, Volume2, ArrowRight, GripVertical, ChevronDown, CalendarDays, LayoutGrid } from 'lucide-react';
 
 interface ScheduleBlock {
   id: string;
@@ -361,6 +361,7 @@ export function ScheduleDashboard({
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [isAddingBlock, setIsAddingBlock] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'today' | 'week'>('today');
 
   // Form error state for custom beautiful validation matching the theme
   const [formError, setFormError] = useState<string | null>(null);
@@ -788,7 +789,35 @@ export function ScheduleDashboard({
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* View mode toggle: Today vs Full Week */}
+          <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#222]">
+            <button
+              type="button"
+              onClick={() => setViewMode('today')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[9.5px] font-black uppercase tracking-wider rounded transition-all cursor-pointer ${
+                viewMode === 'today'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <CalendarDays size={12} />
+              <span>Today ({DAYS.find((d) => d.value === currentDayNum)?.short || 'Today'})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('week')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[9.5px] font-black uppercase tracking-wider rounded transition-all cursor-pointer ${
+                viewMode === 'week'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <LayoutGrid size={12} />
+              <span>Full Week</span>
+            </button>
+          </div>
+
           {/* Time format selector */}
           <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#222]">
             <button
@@ -989,216 +1018,361 @@ export function ScheduleDashboard({
 
         {/* Right Content: Calendar board */}
         <div className="flex-1 flex flex-col min-h-0 bg-[#070707] p-5">
-          
-          {/* Day switcher for narrow screens/mobiles */}
-          <div className="flex lg:hidden overflow-x-auto gap-2 pb-3.5 -mx-4 px-4 [&::-webkit-scrollbar]:hidden shrink-0 items-center border-b border-[#141414] mb-3">
-            {orderedDays.map((d) => {
-              const dayBlocksCount = blocks.filter((b) => b.dayOfWeek === d.value).length;
-              const isActive = activeTabDay === d.value;
-              const isToday = currentDayNum === d.value;
-              return (
-                <button
-                  key={d.value}
-                  onClick={() => setActiveTabDay(d.value)}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 cursor-pointer whitespace-nowrap shrink-0 relative ${
-                    isActive
-                      ? 'bg-purple-600 text-white shadow-md shadow-purple-900/20 scale-[1.03]'
-                      : 'bg-[#0f0f0f] border border-[#1a1a1a] text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  {isToday && (
-                    <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-purple-500'} animate-pulse shrink-0`} />
-                  )}
-                  <span>{isActive ? d.label : d.short}</span>
-                  {dayBlocksCount > 0 && (
-                    <span className={`px-1.5 py-0.5 text-[8px] font-black rounded-md ${
-                      isActive ? 'bg-purple-800/80 text-purple-200' : 'bg-[#1a1a1a] text-gray-400'
-                    }`}>
-                      {dayBlocksCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Desktop/Landscape Weekly Board Grid */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="hidden lg:grid grid-cols-7 gap-3 h-full min-h-[450px]">
-              {orderedDays.map((day) => {
-                const dayBlocks = blocks.filter((b) => b.dayOfWeek === day.value);
-                const isToday = currentDayNum === day.value;
-
-                return (
-                  <div
-                    key={day.value}
-                    className={`flex flex-col bg-[#0b0b0b] border rounded-xl overflow-hidden min-h-[350px] transition-all ${
-                      isToday
-                        ? 'border-purple-600/50 shadow-lg shadow-purple-500/5 bg-[#0f0a14]/10'
-                        : 'border-[#141414] hover:border-[#1e1e1e]'
-                    }`}
-                  >
-                    {/* Column Header */}
-                    <div className={`px-3 py-2 flex items-center justify-between border-b shrink-0 ${isToday ? 'bg-purple-950/20 border-purple-500/20' : 'bg-[#0f0f0f] border-[#161616]'}`}>
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'text-purple-400' : 'text-gray-500'}`}>
-                        {day.label}
-                      </span>
-                      {isToday && (
-                        <span className="text-[8px] font-black uppercase tracking-widest bg-purple-600/30 text-purple-300 px-1.5 py-0.5 rounded">
-                          Today
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Column Blocks Area */}
-                    <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar select-none bg-[#0a0a0a]/30">
-                      {dayBlocks.length > 0 ? (
-                        dayBlocks.map((block) => {
-                          const isCurrent = currentTime && currentDayNum === day.value && currentTime >= block.startTime && currentTime < block.endTime;
-                          const bStyle = getBlockStyle(block.type, block.color, isCurrent);
-
-                          return (
-                            <div
-                              key={block.id}
-                              className={`group border rounded-lg p-2.5 flex flex-col gap-1.5 transition-all relative overflow-hidden ${bStyle.bg} ${bStyle.ring}`}
-                            >
-                              {/* Left status indicator line */}
-                              <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${bStyle.bar}`} />
-                              
-                              <div className="flex items-start justify-between gap-2.5">
-                                <span className="text-[11.5px] font-extrabold tracking-wide text-white leading-snug">
-                                  {block.title}
-                                </span>
-                                <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1 shrink-0">
-                                  <button
-                                    onClick={() => handleEditClick(block)}
-                                    className="p-1 rounded text-gray-500 hover:text-blue-400 hover:bg-[#222]/50 transition-colors cursor-pointer"
-                                  >
-                                    <Edit2 size={10} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(block.id)}
-                                    className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-[#222]/50 transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 size={10} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 font-mono">
-                                <Clock size={10} className="text-gray-500 shrink-0" />
-                                <span>{formatTimeStr(block.startTime, is12Hour)} – {formatTimeStr(block.endTime, is12Hour)}</span>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${bStyle.badge}`}>
-                                  {block.type}
-                                </span>
-                                {isCurrent && (
-                                  <span className="flex items-center gap-1 text-[8px] text-purple-400 font-black uppercase tracking-widest animate-pulse">
-                                    <span className="w-1 h-1 rounded-full bg-purple-500" /> Active
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="h-full flex flex-col items-center justify-center p-4 py-12 text-center border border-dashed border-[#1a1a1a]/40 rounded-lg text-gray-700">
-                          <p className="text-[10px] font-bold uppercase tracking-wider italic">No planned tasks</p>
-                          <span className="text-[8px] text-gray-800 uppercase tracking-widest mt-1">Add blocks to this day</span>
-                        </div>
-                      )}
-                    </div>
+          {viewMode === 'today' ? (
+            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto custom-scrollbar pr-1">
+              {/* Today's Header Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-purple-950/30 via-[#0d0d0d] to-[#121212] border border-purple-500/20 mb-4 shrink-0 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                    <CalendarDays size={20} />
                   </div>
-                );
-              })}
-            </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-black text-white uppercase tracking-wider">
+                        {DAYS.find((d) => d.value === currentDayNum)?.label || 'Today'}'s Schedule
+                      </h3>
+                      <span className="text-[9px] font-black uppercase tracking-widest bg-purple-600 text-white px-2 py-0.5 rounded-md shadow">
+                        Today
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                      {blocks.filter((b) => b.dayOfWeek === currentDayNum).length} time block(s) planned for today
+                    </p>
+                  </div>
+                </div>
 
-            {/* Mobile/Narrow view day content */}
-            <div className="lg:hidden">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('week')}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-[10.5px] uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 shrink-0 group"
+                >
+                  <LayoutGrid size={14} className="group-hover:scale-110 transition-transform" />
+                  <span>Edit Full Weekly Schedule</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+
+              {/* Today's Schedule Timeline / Cards */}
               {(() => {
-                const day = orderedDays.find((d) => d.value === activeTabDay) || orderedDays[0];
-                const dayBlocks = blocks.filter((b) => b.dayOfWeek === day.value);
-                const isToday = currentDayNum === day.value;
+                const todayBlocks = blocks
+                  .filter((b) => b.dayOfWeek === currentDayNum)
+                  .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                if (todayBlocks.length === 0) {
+                  return (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center border border-dashed border-[#1f1f1f] rounded-2xl bg-[#090909]">
+                      <div className="w-12 h-12 rounded-full bg-[#141414] border border-[#222] flex items-center justify-center text-gray-500 mb-3">
+                        <Clock size={24} />
+                      </div>
+                      <h4 className="text-sm font-black text-gray-300 uppercase tracking-widest">No Events Scheduled for Today</h4>
+                      <p className="text-xs text-gray-500 mt-1 max-w-sm">
+                        Your schedule for {DAYS.find((d) => d.value === currentDayNum)?.label} is completely open. Add a new time box or view your full weekly schedule.
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-3 mt-5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDays([currentDayNum]);
+                            handleAddClick();
+                          }}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow"
+                        >
+                          <Plus size={14} />
+                          <span>Add Time Box for Today</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('week')}
+                          className="px-4 py-2 bg-[#161616] hover:bg-[#202020] text-gray-300 border border-[#2d2d2d] font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-2"
+                        >
+                          <LayoutGrid size={14} />
+                          <span>Edit Full Weekly Schedule</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
-                  <div className={`flex flex-col bg-[#0b0b0b] border border-[#141414] rounded-xl overflow-hidden min-h-[300px] ${isToday ? 'border-purple-600/40 bg-[#0f0a14]/5' : ''}`}>
-                    <div className="px-4 py-3 flex items-center justify-between bg-[#0f0f0f] border-b border-[#161616]">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-purple-400">
-                        {day.label}'s Agenda
-                      </span>
-                      {isToday && (
-                        <span className="text-[8px] font-black uppercase tracking-widest bg-purple-600/30 text-purple-300 px-2 py-0.5 rounded">
-                          Today
-                        </span>
-                      )}
-                    </div>
+                  <div className="space-y-3">
+                    {todayBlocks.map((block) => {
+                      const isCurrent = currentTime && currentTime >= block.startTime && currentTime < block.endTime;
+                      const bStyle = getBlockStyle(block.type, block.color, isCurrent);
 
-                    <div className="p-4 space-y-3">
-                      {dayBlocks.length > 0 ? (
-                        dayBlocks.map((block) => {
-                          const isCurrent = currentTime && currentDayNum === day.value && currentTime >= block.startTime && currentTime < block.endTime;
-                          const bStyle = getBlockStyle(block.type, block.color, isCurrent);
+                      return (
+                        <div
+                          key={block.id}
+                          className={`group border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all relative overflow-hidden ${bStyle.bg} ${bStyle.ring}`}
+                        >
+                          <div className={`absolute left-0 top-0 bottom-0 w-[4px] ${bStyle.bar}`} />
 
-                          return (
-                            <div
-                              key={block.id}
-                              className={`border rounded-lg p-3.5 flex flex-col gap-2 relative overflow-hidden ${bStyle.bg} ${bStyle.ring}`}
-                            >
-                              <div className={`absolute left-0 top-0 bottom-0 w-[4px] ${bStyle.bar}`} />
-                              
-                              <div className="flex items-start justify-between gap-4">
-                                <span className="text-[13px] font-black tracking-wide text-white">
+                          <div className="flex items-start gap-3.5 pl-1.5">
+                            <div className="flex flex-col items-center justify-center py-1.5 px-3 bg-[#0a0a0a]/60 border border-[#222]/60 rounded-lg shrink-0 font-mono">
+                              <span className="text-[11px] font-black text-white">{formatTimeStr(block.startTime, is12Hour)}</span>
+                              <span className="text-[9px] text-gray-500 uppercase font-bold">to</span>
+                              <span className="text-[11px] font-black text-white">{formatTimeStr(block.endTime, is12Hour)}</span>
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-black tracking-wide text-white">
                                   {block.title}
                                 </span>
-                                <div className="flex gap-1 shrink-0">
-                                  <button
-                                    onClick={() => handleEditClick(block)}
-                                    className="p-1.5 rounded bg-[#1c1c1c] text-gray-400 hover:text-white"
-                                  >
-                                    <Edit2 size={12} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(block.id)}
-                                    className="p-1.5 rounded bg-[#1c1c1c] text-gray-400 hover:text-red-400"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 font-mono">
-                                <Clock size={12} className="text-gray-500 shrink-0" />
-                                <span>{formatTimeStr(block.startTime, is12Hour)} – {formatTimeStr(block.endTime, is12Hour)}</span>
-                              </div>
-
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${bStyle.badge}`}>
+                                <span className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${bStyle.badge}`}>
                                   {block.type}
                                 </span>
                                 {isCurrent && (
-                                  <span className="flex items-center gap-1 text-[8px] text-purple-400 font-black uppercase tracking-widest animate-pulse">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Active
+                                  <span className="flex items-center gap-1.5 text-[9px] text-purple-400 font-black uppercase tracking-widest bg-purple-950/40 border border-purple-500/40 px-2 py-0.5 rounded-md animate-pulse">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Active Now
                                   </span>
                                 )}
                               </div>
+                              {block.notes && (
+                                <p className="text-[11px] text-gray-400 font-medium leading-relaxed">
+                                  {block.notes}
+                                </p>
+                              )}
                             </div>
-                          );
-                        })
-                      ) : (
-                        <div className="py-16 text-center border border-dashed border-[#1a1a1a] rounded-lg text-gray-700">
-                          <p className="text-xs font-black uppercase tracking-widest italic">No schedule blocks added</p>
-                          <span className="text-[9px] text-gray-800 uppercase tracking-widest block mt-2">Use the form on the left to plan your day</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#222]/40 w-full sm:w-auto justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleEditClick(block)}
+                              className="p-2 rounded-lg bg-[#141414] hover:bg-blue-600/20 text-gray-400 hover:text-blue-300 border border-[#222] hover:border-blue-500/40 transition-all cursor-pointer flex items-center gap-1.5 text-[10px] font-bold"
+                            >
+                              <Edit2 size={12} />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(block.id)}
+                              className="p-2 rounded-lg bg-[#141414] hover:bg-rose-600/20 text-gray-400 hover:text-rose-300 border border-[#222] hover:border-rose-500/40 transition-all cursor-pointer flex items-center gap-1.5 text-[10px] font-bold"
+                            >
+                              <Trash2 size={12} />
+                              <span>Delete</span>
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
                 );
               })()}
             </div>
+          ) : (
+            <>
+              {/* Day switcher for narrow screens/mobiles */}
+              <div className="flex lg:hidden overflow-x-auto gap-2 pb-3.5 -mx-4 px-4 [&::-webkit-scrollbar]:hidden shrink-0 items-center border-b border-[#141414] mb-3">
+                {orderedDays.map((d) => {
+                  const dayBlocksCount = blocks.filter((b) => b.dayOfWeek === d.value).length;
+                  const isActive = activeTabDay === d.value;
+                  const isToday = currentDayNum === d.value;
+                  return (
+                    <button
+                      key={d.value}
+                      onClick={() => setActiveTabDay(d.value)}
+                      className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 cursor-pointer whitespace-nowrap shrink-0 relative ${
+                        isActive
+                          ? 'bg-purple-600 text-white shadow-md shadow-purple-900/20 scale-[1.03]'
+                          : 'bg-[#0f0f0f] border border-[#1a1a1a] text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      {isToday && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-purple-500'} animate-pulse shrink-0`} />
+                      )}
+                      <span>{isActive ? d.label : d.short}</span>
+                      {dayBlocksCount > 0 && (
+                        <span className={`px-1.5 py-0.5 text-[8px] font-black rounded-md ${
+                          isActive ? 'bg-purple-800/80 text-purple-200' : 'bg-[#1a1a1a] text-gray-400'
+                        }`}>
+                          {dayBlocksCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
-          </div>
+              {/* Desktop/Landscape Weekly Board Grid */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="hidden lg:grid grid-cols-7 gap-3 h-full min-h-[450px]">
+                  {orderedDays.map((day) => {
+                    const dayBlocks = blocks.filter((b) => b.dayOfWeek === day.value);
+                    const isToday = currentDayNum === day.value;
+
+                    return (
+                      <div
+                        key={day.value}
+                        className={`flex flex-col bg-[#0b0b0b] border rounded-xl overflow-hidden min-h-[350px] transition-all ${
+                          isToday
+                            ? 'border-purple-600/50 shadow-lg shadow-purple-500/5 bg-[#0f0a14]/10'
+                            : 'border-[#141414] hover:border-[#1e1e1e]'
+                        }`}
+                      >
+                        {/* Column Header */}
+                        <div className={`px-3 py-2 flex items-center justify-between border-b shrink-0 ${isToday ? 'bg-purple-950/20 border-purple-500/20' : 'bg-[#0f0f0f] border-[#161616]'}`}>
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'text-purple-400' : 'text-gray-500'}`}>
+                            {day.label}
+                          </span>
+                          {isToday && (
+                            <span className="text-[8px] font-black uppercase tracking-widest bg-purple-600/30 text-purple-300 px-1.5 py-0.5 rounded">
+                              Today
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Column Blocks Area */}
+                        <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar select-none bg-[#0a0a0a]/30">
+                          {dayBlocks.length > 0 ? (
+                            dayBlocks.map((block) => {
+                              const isCurrent = currentTime && currentDayNum === day.value && currentTime >= block.startTime && currentTime < block.endTime;
+                              const bStyle = getBlockStyle(block.type, block.color, isCurrent);
+
+                              return (
+                                <div
+                                  key={block.id}
+                                  className={`group border rounded-lg p-2.5 flex flex-col gap-1.5 transition-all relative overflow-hidden ${bStyle.bg} ${bStyle.ring}`}
+                                >
+                                  {/* Left status indicator line */}
+                                  <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${bStyle.bar}`} />
+                                  
+                                  <div className="flex items-start justify-between gap-2.5">
+                                    <span className="text-[11.5px] font-extrabold tracking-wide text-white leading-snug">
+                                      {block.title}
+                                    </span>
+                                    <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1 shrink-0">
+                                      <button
+                                        onClick={() => handleEditClick(block)}
+                                        className="p-1 rounded text-gray-500 hover:text-blue-400 hover:bg-[#222]/50 transition-colors cursor-pointer"
+                                      >
+                                        <Edit2 size={10} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(block.id)}
+                                        className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-[#222]/50 transition-colors cursor-pointer"
+                                      >
+                                        <Trash2 size={10} />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 font-mono">
+                                    <Clock size={10} className="text-gray-500 shrink-0" />
+                                    <span>{formatTimeStr(block.startTime, is12Hour)} – {formatTimeStr(block.endTime, is12Hour)}</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${bStyle.badge}`}>
+                                      {block.type}
+                                    </span>
+                                    {isCurrent && (
+                                      <span className="flex items-center gap-1 text-[8px] text-purple-400 font-black uppercase tracking-widest animate-pulse">
+                                        <span className="w-1 h-1 rounded-full bg-purple-500" /> Active
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="h-full flex flex-col items-center justify-center p-4 py-12 text-center border border-dashed border-[#1a1a1a]/40 rounded-lg text-gray-700">
+                              <p className="text-[10px] font-bold uppercase tracking-wider italic">No planned tasks</p>
+                              <span className="text-[8px] text-gray-800 uppercase tracking-widest mt-1">Add blocks to this day</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Mobile/Narrow view day content */}
+                <div className="lg:hidden">
+                  {(() => {
+                    const day = orderedDays.find((d) => d.value === activeTabDay) || orderedDays[0];
+                    const dayBlocks = blocks.filter((b) => b.dayOfWeek === day.value);
+                    const isToday = currentDayNum === day.value;
+
+                    return (
+                      <div className={`flex flex-col bg-[#0b0b0b] border border-[#141414] rounded-xl overflow-hidden min-h-[300px] ${isToday ? 'border-purple-600/40 bg-[#0f0a14]/5' : ''}`}>
+                        <div className="px-4 py-3 flex items-center justify-between bg-[#0f0f0f] border-b border-[#161616]">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-purple-400">
+                            {day.label}'s Agenda
+                          </span>
+                          {isToday && (
+                            <span className="text-[8px] font-black uppercase tracking-widest bg-purple-600/30 text-purple-300 px-2 py-0.5 rounded">
+                              Today
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-4 space-y-3">
+                          {dayBlocks.length > 0 ? (
+                            dayBlocks.map((block) => {
+                              const isCurrent = currentTime && currentDayNum === day.value && currentTime >= block.startTime && currentTime < block.endTime;
+                              const bStyle = getBlockStyle(block.type, block.color, isCurrent);
+
+                              return (
+                                <div
+                                  key={block.id}
+                                  className={`border rounded-lg p-3.5 flex flex-col gap-2 relative overflow-hidden ${bStyle.bg} ${bStyle.ring}`}
+                                >
+                                  <div className={`absolute left-0 top-0 bottom-0 w-[4px] ${bStyle.bar}`} />
+                                  
+                                  <div className="flex items-start justify-between gap-4">
+                                    <span className="text-[13px] font-black tracking-wide text-white">
+                                      {block.title}
+                                    </span>
+                                    <div className="flex gap-1 shrink-0">
+                                      <button
+                                        onClick={() => handleEditClick(block)}
+                                        className="p-1.5 rounded bg-[#1c1c1c] text-gray-400 hover:text-white"
+                                      >
+                                        <Edit2 size={12} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(block.id)}
+                                        className="p-1.5 rounded bg-[#1c1c1c] text-gray-400 hover:text-red-400"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 font-mono">
+                                    <Clock size={12} className="text-gray-500 shrink-0" />
+                                    <span>{formatTimeStr(block.startTime, is12Hour)} – {formatTimeStr(block.endTime, is12Hour)}</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${bStyle.badge}`}>
+                                      {block.type}
+                                    </span>
+                                    {isCurrent && (
+                                      <span className="flex items-center gap-1 text-[8px] text-purple-400 font-black uppercase tracking-widest animate-pulse">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Active
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="py-16 text-center border border-dashed border-[#1a1a1a] rounded-lg text-gray-700">
+                              <p className="text-xs font-black uppercase tracking-widest italic">No schedule blocks added</p>
+                              <span className="text-[9px] text-gray-800 uppercase tracking-widest block mt-2">Use the form on the left to plan your day</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+              </div>
+            </>
+          )}
         </div>
 
       </div>
