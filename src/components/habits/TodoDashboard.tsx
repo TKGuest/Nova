@@ -16,6 +16,7 @@ import {
   subMonths
 } from 'date-fns';
 import { Plus, Trash2, Edit2, Check, X, Calendar, Clock, Sparkles, Award, Bell, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TimePicker } from '@/components/ui/TimePicker';
 import { HabitStats } from '@/types';
 import { doc, setDoc, deleteDoc, updateDoc, collection, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -358,7 +359,7 @@ export function TodoDashboard({
       const statsSnap = await getDoc(statsRef);
       if (statsSnap.exists()) {
         const stats = statsSnap.data() as any;
-        const basePoints = todo.pointsValue || 15;
+        const basePoints = todo.pointsValue ?? 15;
         const multiplier = stats.streakMultiplierActive !== false ? (stats.streakMultiplier ?? 1.0) : 1.0;
         const pointsChange = Math.round(basePoints * multiplier);
 
@@ -445,7 +446,7 @@ export function TodoDashboard({
     setEditDueDate(todo.dueDate || '');
     setEditDueTime(todo.dueTime || '09:00');
     setEditReminderEnabled(todo.reminderEnabled || false);
-    setEditPointsValue(todo.pointsValue || 15);
+    setEditPointsValue(todo.pointsValue ?? 15);
   };
 
   // Save Edit
@@ -595,10 +596,13 @@ export function TodoDashboard({
               <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Points Reward Value</label>
               <input
                 type="number"
-                min="1"
+                min="0"
                 max="500"
                 value={pointsValue}
-                onChange={(e) => setPointsValue(parseInt(e.target.value) || 15)}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setPointsValue(isNaN(val) ? 0 : Math.max(0, val));
+                }}
                 className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
@@ -636,15 +640,12 @@ export function TodoDashboard({
                 Specify the exact time to trigger the alert notification on the selected due date.
               </p>
               <div className="flex gap-2 mt-1.5">
-                <div className="relative flex-1">
-                  <input
-                    type="time"
+                <div className="flex-1">
+                  <TimePicker
                     value={dueTime}
+                    onChange={(val) => setDueTime(val)}
                     disabled={!dueDate}
-                    onChange={(e) => setDueTime(e.target.value)}
-                    className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors pl-9 disabled:opacity-50 h-[38px]"
                   />
-                  <Clock size={14} className="absolute left-3 top-3 text-gray-500" />
                 </div>
                 <label className={`flex items-center gap-2 px-3 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg select-none cursor-pointer h-[38px] ${!dueDate ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <input
@@ -749,8 +750,12 @@ export function TodoDashboard({
                             <label className="text-[10px] font-black uppercase text-gray-500">Points Value</label>
                             <input
                               type="number"
+                              min="0"
                               value={editPointsValue}
-                              onChange={(e) => setEditPointsValue(parseInt(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setEditPointsValue(isNaN(val) ? 0 : Math.max(0, val));
+                              }}
                               className="bg-[#121212] border border-[#2d2d2d] rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-indigo-500 w-full h-[38px]"
                             />
                           </div>
@@ -779,15 +784,12 @@ export function TodoDashboard({
                             Specify the exact time to trigger the alert notification on the selected due date.
                           </p>
                           <div className="flex gap-2 mt-1.5">
-                            <div className="relative flex-1">
-                              <input
-                                type="time"
+                            <div className="flex-1">
+                              <TimePicker
                                 value={editDueTime}
+                                onChange={(val) => setEditDueTime(val)}
                                 disabled={!editDueDate}
-                                onChange={(e) => setEditDueTime(e.target.value)}
-                                className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-indigo-500 transition-colors pl-9 disabled:opacity-50 h-[38px]"
                               />
-                              <Clock size={14} className="absolute left-3 top-3 text-gray-500" />
                             </div>
                             <label className={`flex items-center gap-2 px-3 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg select-none cursor-pointer h-[38px] ${!editDueDate ? 'opacity-50 cursor-not-allowed' : ''}`}>
                               <input
@@ -840,7 +842,7 @@ export function TodoDashboard({
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5 text-[9.5px] font-extrabold tracking-wider uppercase text-gray-500">
                           <span className="flex items-center gap-1">
                             <Sparkles size={11} className="text-amber-500" />
-                            Reward: <strong className="text-amber-400 font-extrabold">{todo.pointsValue || 15} pts</strong>
+                            Reward: <strong className="text-amber-400 font-extrabold">{todo.pointsValue ?? 15} pts</strong>
                           </span>
 
                           {todo.dueDate && (

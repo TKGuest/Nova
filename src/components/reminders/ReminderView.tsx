@@ -6,6 +6,7 @@ import { collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, query, order
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useNotification } from '@/context/NotificationContext';
 import { Bell, Clock, Calendar, Plus, Trash2, ShieldAlert, Sparkles, AlertCircle, Play, Volume2 } from 'lucide-react';
+import { TimePicker } from '@/components/ui/TimePicker';
 import { format, formatDistanceToNow } from 'date-fns';
 import { playDing, playAscendingFanfare } from '@/lib/sounds';
 
@@ -278,13 +279,11 @@ export function ReminderView({ pageId }: { pageId: string }) {
             </div>
 
             {type === 'daily' ? (
-              <div className="space-y-1.5">
-                <label className="text-xs font-black uppercase text-gray-400 tracking-wider">Alarm Time</label>
-                <input
-                  type="time"
+              <div>
+                <TimePicker
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className="w-full bg-[#1e1e1e] text-gray-100 border border-[#2d2d2d] rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 transition-colors text-sm"
+                  onChange={(val) => setTime(val)}
+                  label="Alarm Time"
                 />
               </div>
             ) : (

@@ -8,6 +8,8 @@ import { useNotification } from '@/context/NotificationContext';
 import { playAscendingFanfare, playDing } from '@/lib/sounds';
 import { Clock, Plus, Trash2, Edit2, Check, X, Calendar, AlertCircle, Sparkles, Volume2, ArrowRight, GripVertical, ChevronDown, CalendarDays, LayoutGrid } from 'lucide-react';
 
+import { TimePicker } from '@/components/ui/TimePicker';
+
 interface ScheduleBlock {
   id: string;
   title: string;
@@ -30,179 +32,9 @@ const COLOR_PRESETS = [
   { id: 'fuchsia', label: 'Fuchsia', bgClass: 'bg-fuchsia-500' },
 ] as const;
 
-const formatTimeStr = (time24: string, format12h: boolean): string => {
-  if (!time24) return '';
-  if (!format12h) return time24;
-  const [hourStr, minStr] = time24.split(':');
-  const hour = parseInt(hourStr, 10);
-  if (isNaN(hour)) return time24;
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${hour12}:${minStr} ${period}`;
+const formatTimeStr = (time24: string): string => {
+  return time24 || '';
 };
-
-function TimePicker({
-  value,
-  onChange,
-  is12Hour,
-  label,
-  align = 'left'
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  is12Hour: boolean;
-  label: string;
-  align?: 'left' | 'right';
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const [hour24, min] = value.split(':').map(v => parseInt(v, 10));
-  const activeHour24 = isNaN(hour24) ? 6 : hour24;
-  const activeMin = isNaN(min) ? 0 : min;
-
-  // Determine active display states
-  let displayHour = activeHour24;
-  let period: 'AM' | 'PM' = 'AM';
-  if (is12Hour) {
-    displayHour = activeHour24 % 12 === 0 ? 12 : activeHour24 % 12;
-    period = activeHour24 >= 12 ? 'PM' : 'AM';
-  }
-
-  const hours = is12Hour 
-    ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] 
-    : Array.from({ length: 24 }, (_, i) => i);
-
-  const minutes = Array.from({ length: 60 }, (_, i) => i);
-
-  const handleHourSelect = (h: number) => {
-    let newHour24 = h;
-    if (is12Hour) {
-      if (period === 'PM' && h < 12) newHour24 += 12;
-      if (period === 'AM' && h === 12) newHour24 = 0;
-    }
-    onChange(`${String(newHour24).padStart(2, '0')}:${String(activeMin).padStart(2, '0')}`);
-  };
-
-  const handleMinSelect = (m: number) => {
-    onChange(`${String(activeHour24).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-  };
-
-  const handlePeriodSelect = (p: 'AM' | 'PM') => {
-    let newHour24 = activeHour24;
-    const current12h = activeHour24 % 12 === 0 ? 12 : activeHour24 % 12;
-    if (p === 'PM' && current12h < 12) newHour24 = current12h + 12;
-    if (p === 'AM') newHour24 = current12h === 12 ? 0 : current12h;
-    onChange(`${String(newHour24).padStart(2, '0')}:${String(activeMin).padStart(2, '0')}`);
-  };
-
-  const displayValue = formatTimeStr(value, is12Hour);
-
-  return (
-    <div className="relative w-full" ref={containerRef}>
-      <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider mb-1 block">{label}</label>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-[#111] border border-[#222] rounded-lg px-2.5 py-2 text-white font-mono font-bold text-xs text-left flex items-center justify-between hover:border-purple-500 hover:bg-[#151515] transition-all cursor-pointer select-none"
-      >
-        <span>{displayValue}</span>
-        <Clock size={11} className="text-gray-500 shrink-0 ml-1.5" />
-      </button>
-
-      {isOpen && (
-        <div 
-          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-1 bg-[#141414] border border-[#2d2d2d] rounded-xl shadow-2xl p-2.5 flex gap-1.5 z-[100] text-xs w-[215px] select-none h-56 animate-fadeIn`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Hours Column */}
-          <div className="flex-1 flex flex-col min-w-[50px] h-full">
-            <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 text-center mb-1 shrink-0">Hr</span>
-            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#333] [&::-webkit-scrollbar-thumb]:rounded space-y-0.5 pr-0.5">
-              {hours.map((h) => {
-                const isSelected = is12Hour 
-                  ? displayHour === h 
-                  : activeHour24 === h;
-                return (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => handleHourSelect(h)}
-                    className={`w-full py-1 text-center font-mono font-black text-[11px] rounded transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'bg-purple-600 text-white' 
-                        : 'text-gray-400 hover:bg-[#222] hover:text-white'
-                    }`}
-                  >
-                    {String(h).padStart(2, '0')}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Minutes Column */}
-          <div className="flex-1 flex flex-col min-w-[50px] h-full">
-            <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 text-center mb-1 shrink-0">Min</span>
-            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#333] [&::-webkit-scrollbar-thumb]:rounded space-y-0.5 pr-0.5">
-              {minutes.map((m) => {
-                const isSelected = activeMin === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => handleMinSelect(m)}
-                    className={`w-full py-1 text-center font-mono font-black text-[11px] rounded transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'bg-purple-600 text-white' 
-                        : 'text-gray-400 hover:bg-[#222] hover:text-white'
-                    }`}
-                  >
-                    {String(m).padStart(2, '0')}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* AM/PM Column */}
-          {is12Hour && (
-            <div className="flex flex-col min-w-[45px] border-l border-[#222] pl-1.5 justify-center gap-1.5 shrink-0">
-              <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 text-center mb-1">Am/Pm</span>
-              {(['AM', 'PM'] as const).map((p) => {
-                const isSelected = period === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => handlePeriodSelect(p)}
-                    className={`w-full py-1.5 text-center font-mono font-black text-[11px] rounded transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'bg-purple-600 text-white shadow shadow-purple-600/30' 
-                        : 'bg-[#1a1a1a] text-gray-400 border border-[#222] hover:text-white hover:bg-[#222]'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function DayOfWeekPicker({
   selectedDays,
@@ -366,18 +198,6 @@ export function ScheduleDashboard({
   // Form error state for custom beautiful validation matching the theme
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [is12Hour, setIs12Hour] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`schedule_time_format_12h_${pageId}`);
-      return saved === 'true';
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    localStorage.setItem(`schedule_time_format_12h_${pageId}`, String(is12Hour));
-  }, [is12Hour, pageId]);
-
   // Helper to find latest block's end time and set start/end times
   const getLatestBlockTimes = (selectedDay: number, currentBlocks: ScheduleBlock[]) => {
     const dayBlocks = currentBlocks.filter(b => b.dayOfWeek === selectedDay);
@@ -521,7 +341,7 @@ export function ScheduleDashboard({
           
           // Play fanfare sound and show visual alert
           playAscendingFanfare();
-          showToast(`⏰ IMPORTANT EVENT STARTING: "${block.title}" is starting right now! (${formatTimeStr(block.startTime, is12Hour)} - ${formatTimeStr(block.endTime, is12Hour)})`, "success");
+          showToast(`⏰ IMPORTANT EVENT STARTING: "${block.title}" is starting right now! (${formatTimeStr(block.startTime)} - ${formatTimeStr(block.endTime)})`, "success");
         }
       }
     });
@@ -597,7 +417,7 @@ export function ScheduleDashboard({
 
       if (overlappingBlock) {
         const dayLabel = DAYS.find((dayObj) => dayObj.value === d)?.label || `Day ${d}`;
-        setFormError(`Time slot on ${dayLabel} overlaps with "${overlappingBlock.title}" (${formatTimeStr(overlappingBlock.startTime, is12Hour)} - ${formatTimeStr(overlappingBlock.endTime, is12Hour)})`);
+        setFormError(`Time slot on ${dayLabel} overlaps with "${overlappingBlock.title}" (${formatTimeStr(overlappingBlock.startTime)} - ${formatTimeStr(overlappingBlock.endTime)})`);
         return;
       }
     }
@@ -818,24 +638,6 @@ export function ScheduleDashboard({
             </button>
           </div>
 
-          {/* Time format selector */}
-          <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#222]">
-            <button
-              type="button"
-              onClick={() => setIs12Hour(false)}
-              className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${!is12Hour ? 'bg-purple-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              24H
-            </button>
-            <button
-              type="button"
-              onClick={() => setIs12Hour(true)}
-              className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${is12Hour ? 'bg-purple-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              12H
-            </button>
-          </div>
-
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg bg-[#111] border border-[#222] text-gray-400 hover:text-white transition-all cursor-pointer"
@@ -854,7 +656,7 @@ export function ScheduleDashboard({
               <span className="text-gray-500">Currently Happening: </span>
               {currentBlock ? (
                 <span className={`ml-1 font-extrabold ${getBlockStyle(currentBlock.type, currentBlock.color).text}`}>
-                  {currentBlock.title} ({formatTimeStr(currentBlock.startTime, is12Hour)} – {formatTimeStr(currentBlock.endTime, is12Hour)})
+                  {currentBlock.title} ({formatTimeStr(currentBlock.startTime)} – {formatTimeStr(currentBlock.endTime)})
                 </span>
               ) : (
                 <span className="text-gray-600 ml-1 italic font-normal">Free Time / No active scheduled event</span>
@@ -865,7 +667,7 @@ export function ScheduleDashboard({
             <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
               <span>Up Next today:</span>
               <span className="text-gray-400">{nextBlock.title}</span>
-              <span className="px-1.5 py-0.5 rounded bg-[#111] border border-[#222] text-purple-400 font-mono">{formatTimeStr(nextBlock.startTime, is12Hour)}</span>
+              <span className="px-1.5 py-0.5 rounded bg-[#111] border border-[#222] text-purple-400 font-mono">{formatTimeStr(nextBlock.startTime)}</span>
             </div>
           )}
         </div>
@@ -923,14 +725,12 @@ export function ScheduleDashboard({
                 <TimePicker
                   value={startTime}
                   onChange={(val) => setStartTime(val)}
-                  is12Hour={is12Hour}
                   label="Start Time"
                   align="left"
                 />
                 <TimePicker
                   value={endTime}
                   onChange={(val) => setEndTime(val)}
-                  is12Hour={is12Hour}
                   label="End Time"
                   align="right"
                 />
@@ -1108,9 +908,9 @@ export function ScheduleDashboard({
 
                           <div className="flex items-start gap-3.5 pl-1.5">
                             <div className="flex flex-col items-center justify-center py-1.5 px-3 bg-[#0a0a0a]/60 border border-[#222]/60 rounded-lg shrink-0 font-mono">
-                              <span className="text-[11px] font-black text-white">{formatTimeStr(block.startTime, is12Hour)}</span>
+                              <span className="text-[11px] font-black text-white">{formatTimeStr(block.startTime)}</span>
                               <span className="text-[9px] text-gray-500 uppercase font-bold">to</span>
-                              <span className="text-[11px] font-black text-white">{formatTimeStr(block.endTime, is12Hour)}</span>
+                              <span className="text-[11px] font-black text-white">{formatTimeStr(block.endTime)}</span>
                             </div>
 
                             <div className="flex flex-col gap-1">
@@ -1259,7 +1059,7 @@ export function ScheduleDashboard({
 
                                   <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 font-mono">
                                     <Clock size={10} className="text-gray-500 shrink-0" />
-                                    <span>{formatTimeStr(block.startTime, is12Hour)} – {formatTimeStr(block.endTime, is12Hour)}</span>
+                                    <span>{formatTimeStr(block.startTime)} – {formatTimeStr(block.endTime)}</span>
                                   </div>
 
                                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -1342,7 +1142,7 @@ export function ScheduleDashboard({
 
                                   <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 font-mono">
                                     <Clock size={12} className="text-gray-500 shrink-0" />
-                                    <span>{formatTimeStr(block.startTime, is12Hour)} – {formatTimeStr(block.endTime, is12Hour)}</span>
+                                    <span>{formatTimeStr(block.startTime)} – {formatTimeStr(block.endTime)}</span>
                                   </div>
 
                                   <div className="flex items-center gap-2 mt-1">

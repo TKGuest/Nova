@@ -814,7 +814,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         };
         
         // Base points: either custom defined on task, or default 10.
-        let basePoints = task?.pointsValue || 10;
+        let basePoints = task?.pointsValue ?? 10;
         if (task?.rewardMode === 'subtasks_separately' && task?.bonusRequirement === 'main_task') {
            const completedSubs = task.subTasks ? task.subTasks.filter((s: any) => !!recordData[`${taskId}_${s.id}`]).length : 0;
            if (completedSubs === 0) {
@@ -949,7 +949,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       const statsSnap = await getDoc(statsRef);
       if (statsSnap.exists()) {
         const stats = statsSnap.data() as any;
-        const basePoints = task.pointsValue || 10;
+        const basePoints = task.pointsValue ?? 10;
         const multiplier = stats.streakMultiplierActive !== false ? (stats.streakMultiplier ?? 1.0) : 1.0;
         const pointsChange = Math.round(basePoints * multiplier);
 
@@ -3042,9 +3042,13 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
               </span>
               <input 
                 type="number" 
+                min={0}
                 className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
-                defaultValue={task.pointsValue || 10}
-                onBlur={(e) => onUpdate(task.id, { pointsValue: parseInt(e.target.value) || 10 })}
+                defaultValue={task.pointsValue ?? 10}
+                onBlur={(e) => {
+                  const val = parseInt(e.target.value);
+                  onUpdate(task.id, { pointsValue: isNaN(val) ? 10 : Math.max(0, val) });
+                }}
                 onWheel={(e) => e.currentTarget.blur()}
               />
             </div>
@@ -3150,10 +3154,12 @@ function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { ta
                       <span className="text-[9.5px] text-gray-500 font-black uppercase tracking-wider">Points</span>
                       <input 
                         type="number"
+                        min={0}
                         className="w-14 bg-[#1a1a1a] border border-[#2d2d2d] rounded px-1.5 py-0.5 text-center text-[12px] font-bold text-purple-400 outline-none focus:border-purple-500 transition-colors"
                         defaultValue={sub.points ?? 2}
                         onBlur={(e) => {
-                          const pointsVal = parseInt(e.target.value) || 0;
+                          const parsed = parseInt(e.target.value);
+                          const pointsVal = isNaN(parsed) ? 0 : Math.max(0, parsed);
                           const newSubs = task.subTasks!.map(s => s.id === sub.id ? { ...s, points: pointsVal } : s);
                           onUpdate(task.id, { subTasks: newSubs });
                         }}

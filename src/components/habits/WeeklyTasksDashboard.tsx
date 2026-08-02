@@ -57,7 +57,7 @@ export function WeeklyTasksDashboard({
   const pointsEarnedThisWeek = weeklyTasks.reduce((sum, task) => {
     const isCompleted = !!currentWeeklyRecord?.data?.[task.id];
     if (isCompleted) {
-      return sum + (task.pointsValue || 10);
+      return sum + (task.pointsValue ?? 10);
     }
     return sum;
   }, 0);
@@ -95,7 +95,7 @@ export function WeeklyTasksDashboard({
   const handleStartEdit = (task: MasterTask) => {
     setEditingTaskId(task.id);
     setEditName(task.name);
-    setEditPoints(task.pointsValue || 10);
+    setEditPoints(task.pointsValue ?? 10);
   };
 
   const handleSaveEdit = async (taskId: string) => {
@@ -214,10 +214,13 @@ export function WeeklyTasksDashboard({
                 <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Points Value</label>
                 <input 
                   type="number"
-                  min="1"
+                  min="0"
                   max="500"
                   value={newPoints}
-                  onChange={(e) => setNewPoints(parseInt(e.target.value) || 10)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setNewPoints(isNaN(val) ? 0 : Math.max(0, val));
+                  }}
                   className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500 transition-colors"
                 />
               </div>
@@ -281,8 +284,12 @@ export function WeeklyTasksDashboard({
                           />
                           <input 
                             type="number"
+                            min="0"
                             value={editPoints}
-                            onChange={(e) => setEditPoints(parseInt(e.target.value) || 0)}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setEditPoints(isNaN(val) ? 0 : Math.max(0, val));
+                            }}
                             className="bg-[#1e1e1e] border border-[#2d2d2d] rounded px-2.5 py-1 text-xs text-white outline-none focus:border-blue-500 w-16"
                           />
                           <button onClick={() => handleSaveEdit(task.id)} className="p-1 text-green-400 hover:bg-[#222] rounded"><Check size={14}/></button>
@@ -295,7 +302,7 @@ export function WeeklyTasksDashboard({
                           </span>
                           <span className="text-[10px] text-gray-500 font-extrabold tracking-wider uppercase mt-0.5 flex items-center gap-1">
                             <Sparkles size={10} className="text-amber-500" />
-                            Reward: <strong className="text-amber-400 font-extrabold">{task.pointsValue || 10} pts</strong>
+                            Reward: <strong className="text-amber-400 font-extrabold">{task.pointsValue ?? 10} pts</strong>
                           </span>
                         </div>
                       )}
