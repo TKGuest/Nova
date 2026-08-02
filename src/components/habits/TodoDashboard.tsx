@@ -111,15 +111,39 @@ export function DatePicker({ selectedDate, onChange, label }: DatePickerProps) {
         className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white text-left flex items-center justify-between outline-none focus:border-indigo-500 hover:border-[#3e3e3e] transition-all cursor-pointer h-[38px]"
       >
         <span className={selectedDate ? 'text-white font-semibold' : 'text-gray-500'}>
-          {selectedDate ? format(parseISO(selectedDate), 'MMMM d, yyyy') : 'Select Due Date...'}
+          {selectedDate ? format(parseISO(selectedDate), 'MMMM d, yyyy') : 'No Due Date (Optional)'}
         </span>
-        <Calendar size={14} className="text-gray-400" />
+        <div className="flex items-center gap-1.5">
+          {selectedDate && (
+            <span
+              onClick={handleClear}
+              title="Clear / No Date"
+              className="p-1 hover:bg-[#333] hover:text-red-400 text-gray-400 rounded transition-colors cursor-pointer"
+            >
+              <X size={12} />
+            </span>
+          )}
+          <Calendar size={14} className="text-gray-400" />
+        </div>
       </button>
 
       {isOpen && (
         <div className="absolute z-50 mt-1 bg-[#161616] border border-[#2d2d2d] rounded-xl p-3 shadow-2xl w-64 animate-in fade-in zoom-in-95 duration-150 right-0 md:left-0">
+          {/* Top No Date Option */}
+          <button
+            type="button"
+            onClick={handleClear}
+            className={`w-full mb-2 py-1.5 px-2 text-center text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+              !selectedDate
+                ? 'bg-indigo-600 text-white font-extrabold'
+                : 'bg-[#222] text-gray-300 hover:bg-[#2a2a2a] hover:text-white border border-[#2d2d2d]'
+            }`}
+          >
+            No Due Date
+          </button>
+
           {/* Calendar Header */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 pt-1 border-t border-[#222]">
             <button
               type="button"
               onClick={handlePrevMonth}
@@ -180,7 +204,7 @@ export function DatePicker({ selectedDate, onChange, label }: DatePickerProps) {
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-[9px] font-black uppercase text-red-400 hover:text-red-300 tracking-wider"
+                className="text-[9px] font-black uppercase text-red-400 hover:text-red-300 tracking-wider cursor-pointer"
               >
                 Clear Date
               </button>
@@ -298,12 +322,12 @@ export function TodoDashboard({
       const newTodo: TodoItem = {
         id: todoId,
         title: title.trim(),
-        notes: notes.trim() || undefined,
+        notes: notes.trim() || '',
         completed: false,
         createdAt: Date.now(),
-        dueDate: dueDate || undefined,
-        dueTime: dueDate ? dueTime : undefined,
-        reminderEnabled: reminderEnabled && dueDate ? true : false,
+        dueDate: dueDate || '',
+        dueTime: dueDate ? dueTime : '',
+        reminderEnabled: reminderEnabled && !!dueDate,
         pointsValue
       };
 
@@ -462,10 +486,10 @@ export function TodoDashboard({
       
       const updatedFields: Partial<TodoItem> = {
         title: editTitle.trim(),
-        notes: editNotes.trim() || undefined,
-        dueDate: editDueDate || undefined,
-        dueTime: editDueDate ? editDueTime : undefined,
-        reminderEnabled: editReminderEnabled && editDueDate ? true : false,
+        notes: editNotes.trim() || '',
+        dueDate: editDueDate || '',
+        dueTime: editDueDate ? editDueTime : '',
+        reminderEnabled: editReminderEnabled && !!editDueDate,
         pointsValue: editPointsValue
       };
 
@@ -630,37 +654,37 @@ export function TodoDashboard({
               />
             </div>
 
-            {/* Specific "Time" Section for Notification */}
-            <div className="space-y-1.5 p-3.5 bg-[#121212] border border-[#222] rounded-xl flex flex-col justify-center">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Clock size={12} className="text-indigo-400" />
-                Time to Notify
-              </label>
-              <p className="text-[9px] text-gray-500 font-semibold leading-normal">
-                Specify the exact time to trigger the alert notification on the selected due date.
-              </p>
-              <div className="flex gap-2 mt-1.5">
-                <div className="flex-1">
-                  <TimePicker
-                    value={dueTime}
-                    onChange={(val) => setDueTime(val)}
-                    disabled={!dueDate}
-                  />
-                </div>
-                <label className={`flex items-center gap-2 px-3 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg select-none cursor-pointer h-[38px] ${!dueDate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={reminderEnabled && !!dueDate}
-                    disabled={!dueDate}
-                    onChange={(e) => setReminderEnabled(e.target.checked)}
-                    className="rounded text-indigo-500 focus:ring-indigo-500 bg-[#222] border-[#2d2d2d] disabled:opacity-50 cursor-pointer"
-                  />
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                    <Bell size={11} className={reminderEnabled && dueDate ? 'text-indigo-400' : 'text-gray-500'} /> Alarm On
-                  </span>
+            {/* Specific "Time" Section for Notification - only appears if user chooses a date */}
+            {dueDate && (
+              <div className="space-y-1.5 p-3.5 bg-[#121212] border border-[#222] rounded-xl flex flex-col justify-center animate-fadeIn">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Clock size={12} className="text-indigo-400" />
+                  Time to Notify
                 </label>
+                <p className="text-[9px] text-gray-500 font-semibold leading-normal">
+                  Specify the exact time to trigger the alert notification on the selected due date.
+                </p>
+                <div className="flex gap-2 mt-1.5">
+                  <div className="flex-1">
+                    <TimePicker
+                      value={dueTime}
+                      onChange={(val) => setDueTime(val)}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 px-3 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg select-none cursor-pointer h-[38px]">
+                    <input
+                      type="checkbox"
+                      checked={reminderEnabled}
+                      onChange={(e) => setReminderEnabled(e.target.checked)}
+                      className="rounded text-indigo-500 focus:ring-indigo-500 bg-[#222] border-[#2d2d2d] cursor-pointer"
+                    />
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                      <Bell size={11} className={reminderEnabled ? 'text-indigo-400' : 'text-gray-500'} /> Alarm On
+                    </span>
+                  </label>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -774,37 +798,37 @@ export function TodoDashboard({
                           </div>
                         </div>
 
-                        {/* Specific "Time" Section for Notification */}
-                        <div className="space-y-1.5 p-3.5 bg-[#121212] border border-[#222] rounded-xl flex flex-col justify-center">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                            <Clock size={12} className="text-indigo-400" />
-                            Time to Notify
-                          </label>
-                          <p className="text-[9px] text-gray-500 font-semibold leading-normal">
-                            Specify the exact time to trigger the alert notification on the selected due date.
-                          </p>
-                          <div className="flex gap-2 mt-1.5">
-                            <div className="flex-1">
-                              <TimePicker
-                                value={editDueTime}
-                                onChange={(val) => setEditDueTime(val)}
-                                disabled={!editDueDate}
-                              />
-                            </div>
-                            <label className={`flex items-center gap-2 px-3 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg select-none cursor-pointer h-[38px] ${!editDueDate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                              <input
-                                type="checkbox"
-                                checked={editReminderEnabled && !!editDueDate}
-                                disabled={!editDueDate}
-                                onChange={(e) => setEditReminderEnabled(e.target.checked)}
-                                className="rounded text-indigo-500 focus:ring-indigo-500 bg-[#222] border-[#2d2d2d] disabled:opacity-50 cursor-pointer"
-                              />
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                                <Bell size={11} className={editReminderEnabled && editDueDate ? 'text-indigo-400' : 'text-gray-500'} /> Alarm On
-                              </span>
+                        {/* Specific "Time" Section for Notification - only appears if user chooses a date */}
+                        {editDueDate && (
+                          <div className="space-y-1.5 p-3.5 bg-[#121212] border border-[#222] rounded-xl flex flex-col justify-center animate-fadeIn">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                              <Clock size={12} className="text-indigo-400" />
+                              Time to Notify
                             </label>
+                            <p className="text-[9px] text-gray-500 font-semibold leading-normal">
+                              Specify the exact time to trigger the alert notification on the selected due date.
+                            </p>
+                            <div className="flex gap-2 mt-1.5">
+                              <div className="flex-1">
+                                <TimePicker
+                                  value={editDueTime}
+                                  onChange={(val) => setEditDueTime(val)}
+                                />
+                              </div>
+                              <label className="flex items-center gap-2 px-3 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg select-none cursor-pointer h-[38px]">
+                                <input
+                                  type="checkbox"
+                                  checked={editReminderEnabled}
+                                  onChange={(e) => setEditReminderEnabled(e.target.checked)}
+                                  className="rounded text-indigo-500 focus:ring-indigo-500 bg-[#222] border-[#2d2d2d] cursor-pointer"
+                                />
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                  <Bell size={11} className={editReminderEnabled ? 'text-indigo-400' : 'text-gray-500'} /> Alarm On
+                                </span>
+                              </label>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         <div className="flex gap-2 justify-end pt-1">
                           <button

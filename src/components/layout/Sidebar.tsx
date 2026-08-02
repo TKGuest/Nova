@@ -23,6 +23,7 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, page: PageModel } | null>(null);
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
   const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const hasSeededRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -31,7 +32,8 @@ export function Sidebar() {
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       let fetched = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as PageModel));
       
-      if (fetched.length === 0 && !snapshot.metadata.hasPendingWrites) {
+      if (fetched.length === 0 && !snapshot.metadata.hasPendingWrites && !hasSeededRef.current) {
+        hasSeededRef.current = true;
         const noteId = Date.now().toString();
         const habitId = (Date.now() + 1).toString();
         
@@ -42,8 +44,9 @@ export function Sidebar() {
         await setDoc(doc(db, 'users', user.uid, 'pages', habitId), habitPage);
         
         fetched = [notePage, habitPage];
-        fetched = [notePage, habitPage];
         router.push(`/page/${noteId}`);
+      } else if (fetched.length > 0) {
+        hasSeededRef.current = true;
       }
 
       // Auto-cleanup 30-day old trashed pages

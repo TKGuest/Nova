@@ -28,6 +28,15 @@ try {
   console.log("Service Worker Firebase initialization failed.", e);
 }
 
+// Immediate installation & activation
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Add IndexedDB support and message listener for background reminders
 function getDB() {
   return new Promise((resolve, reject) => {
@@ -119,13 +128,15 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Periodic check loop
+// Periodic check loop - runs every 5 seconds
 setInterval(async () => {
   try {
     const reminders = await getAllReminders();
     const now = new Date();
-    const nowTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-    const nowDayStr = now.toISOString().split('T')[0];
+    const nowHours = now.getHours().toString().padStart(2, '0');
+    const nowMinutes = now.getMinutes().toString().padStart(2, '0');
+    const nowTime = `${nowHours}:${nowMinutes}`;
+    const nowDayStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 
     for (const reminder of reminders) {
       if (!reminder.active) continue;
@@ -145,21 +156,33 @@ setInterval(async () => {
         }
       } else if (reminder.type === 'once') {
         const reminderTime = new Date(reminder.dateTime);
-        if (reminderTime <= now) {
+        const timeDiff = now.getTime() - reminderTime.getTime();
+        if (reminderTime <= now && timeDiff < 3 * 60 * 1000) {
           shouldTrigger = true;
+          reminder.active = false;
+          await saveReminder(reminder);
+        } else if (timeDiff >= 3 * 60 * 1000) {
           reminder.active = false;
           await saveReminder(reminder);
         }
       }
 
       if (shouldTrigger) {
-        self.registration.showNotification(reminder.title || 'Reminder Alert!', {
-          body: reminder.body || 'You have an active reminder.',
-          icon: '/favicon.ico',
-          tag: reminder.id,
-          requireInteraction: true,
-          vibrate: [200, 100, 200]
-        });
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          self.registration.showNotification(reminder.title || 'Reminder Alert!', {
+            body: reminder.body || 'You have an active reminder.',
+            icon: '/favicon.ico',
+            tag: reminder.id,
+            requireInteraction: true,
+            vibrate: [200, 100, 200]
+          });
+        } else {
+          self.registration.showNotification(reminder.title || 'Reminder Alert!', {
+            body: reminder.body || 'You have an active reminder.',
+            icon: '/favicon.ico',
+            tag: reminder.id
+          });
+        }
 
         if (reminder.type === 'timer') {
           await deleteReminder(reminder.id);
@@ -169,4 +192,4 @@ setInterval(async () => {
   } catch (err) {
     console.error('[SW] Error in periodic reminder check:', err);
   }
-}, 10000); // Check every 10 seconds
+}, 5000);

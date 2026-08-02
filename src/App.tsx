@@ -52,23 +52,25 @@ function AppContent() {
 
       const activePages = pagesSnap.docs.map(d => ({ id: d.id, ...d.data() } as PageModel)).filter(p => !p.deletedAt);
 
-      const reminderPages = activePages.filter(p => p.type === 'reminder');
       const habitPages = activePages.filter(p => p.type === 'habit');
-      const reminderAndHabitPages = activePages.filter(p => p.type === 'reminder' || p.type === 'habit');
 
       const allSyncedReminders: any[] = [];
 
       const syncToSW = () => {
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'SYNC_REMINDERS',
-            reminders: allSyncedReminders
-          });
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then((reg) => {
+            if (reg.active) {
+              reg.active.postMessage({
+                type: 'SYNC_REMINDERS',
+                reminders: allSyncedReminders
+              });
+            }
+          }).catch(console.error);
         }
       };
 
-      // 1. Subscribe to each reminder & habit page's reminders subcollection
-      reminderAndHabitPages.forEach(p => {
+      // 1. Subscribe to each active page's reminders subcollection
+      activePages.forEach(p => {
         const rRef = collection(db, 'users', user.uid, 'pages', p.id, 'reminders');
         const unsub = onSnapshot(rRef, (snap) => {
           const pageReminderIds = snap.docs.map(doc => doc.id);

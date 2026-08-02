@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useNotification } from '@/context/NotificationContext';
-import { Bell, Clock, Calendar, Plus, Trash2, ShieldAlert, Sparkles, AlertCircle, Play, Volume2 } from 'lucide-react';
+import { Bell, Clock, Calendar, Plus, Trash2, ShieldAlert, AlertCircle, X } from 'lucide-react';
 import { TimePicker } from '@/components/ui/TimePicker';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { playDing, playAscendingFanfare } from '@/lib/sounds';
 
 interface Reminder {
@@ -26,11 +26,12 @@ export function ReminderView({ pageId }: { pageId: string }) {
   const { showToast } = useNotification();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   // Form states
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [type, setType] = useState<'once' | 'daily'>('once');
+  const [type, setType] = useState<'once' | 'daily'>('daily');
   const [time, setTime] = useState('09:00');
   const [dateTime, setDateTime] = useState('');
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
@@ -49,31 +50,35 @@ export function ReminderView({ pageId }: { pageId: string }) {
     const q = query(remindersRef, orderBy('createdAt', 'desc'));
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({
+      let items = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Reminder[];
+
       setReminders(items);
       setLoading(false);
 
       // Trigger sync to Service Worker
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        // Prepare list of SW-compatible active reminders
-        const activeItems = items
-          .filter(r => r.active)
-          .map(r => ({
-            id: r.id,
-            type: r.type,
-            title: r.title,
-            body: r.body,
-            time: r.time || '',
-            dateTime: r.dateTime || '',
-            active: r.active
-          }));
-        navigator.serviceWorker.controller.postMessage({
-          type: 'SYNC_REMINDERS',
-          reminders: activeItems
-        });
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((reg) => {
+          if (reg.active) {
+            const activeItems = items
+              .filter(r => r.active)
+              .map(r => ({
+                id: r.id,
+                type: r.type,
+                title: r.title,
+                body: r.body,
+                time: r.time || '',
+                dateTime: r.dateTime || '',
+                active: r.active
+              }));
+            reg.active.postMessage({
+              type: 'SYNC_REMINDERS',
+              reminders: activeItems
+            });
+          }
+        }).catch(console.error);
       }
     }, (err) => {
       console.error(err);
@@ -128,9 +133,10 @@ export function ReminderView({ pageId }: { pageId: string }) {
       showToast('Reminder scheduled successfully!', 'success');
       playDing();
 
-      // Reset form
+      // Reset form & close
       setTitle('');
       setBody('');
+      setIsFormOpen(false);
     } catch (err) {
       console.error('Error adding reminder:', err);
       showToast('Failed to schedule reminder', 'error');
@@ -161,125 +167,135 @@ export function ReminderView({ pageId }: { pageId: string }) {
     }
   };
 
-  const handleAddPreset = async (presetTitle: string, presetTime: string, isDaily: boolean) => {
-    if (!user || !pageId) return;
-    
-    if (permissionStatus !== 'granted') {
-      const status = await Notification.requestPermission();
-      setPermissionStatus(status);
-    }
-
-    try {
-      const remindersRef = collection(db, 'users', user.uid, 'pages', pageId, 'reminders');
-      const newReminder: Omit<Reminder, 'id'> = {
-        title: presetTitle,
-        body: 'Scheduled preset alarm',
-        type: isDaily ? 'daily' : 'once',
-        active: true,
-        createdAt: Date.now(),
-        ...(isDaily ? { time: presetTime } : { dateTime: new Date(Date.now() + 5 * 60 * 1000).toISOString() })
-      };
-
-      await addDoc(remindersRef, newReminder);
-      showToast(`Added preset: ${presetTitle}`, 'success');
-      playDing();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in p-1">
-      {/* HEADER SECTION WITH PERMISSION NOTIFIER */}
-      <div className="p-6 rounded-2xl bg-[#252526] border border-[#2d2d2d] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
-              <Bell size={24} className="animate-bounce" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-100">Alarms & Notifications</h2>
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in p-1">
+      {/* TOP HUB BAR: TITLE, SYSTEM NOTIFICATION BADGE & CREATE BUTTON */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#252526] border border-[#2d2d2d] shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/20">
+            <Bell size={20} className="animate-pulse" />
           </div>
-          <p className="text-sm text-gray-400">
-            Keep your routine sharp even when the tab is closed. We use service workers and offline alarms to alert you.
-          </p>
+          <div>
+            <h2 className="text-lg font-bold text-gray-100 flex items-center gap-2">
+              Scheduled Active Alarms
+              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-black">
+                {reminders.length}
+              </span>
+            </h2>
+            <p className="text-xs text-gray-400">Manage your active alarms and notification schedules.</p>
+          </div>
         </div>
 
-        {permissionStatus !== 'granted' ? (
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          {/* SYSTEM NOTIFICATION BADGE */}
+          {permissionStatus !== 'granted' ? (
+            <button
+              onClick={handleRequestPermission}
+              className="flex items-center gap-2 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-gray-950 rounded-xl font-bold transition-all text-xs shrink-0 cursor-pointer shadow-md"
+            >
+              <ShieldAlert size={14} /> Enable Notifications
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-medium text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              System notifications active
+            </div>
+          )}
+
+          {/* CREATE NEW ALARM BUTTON */}
           <button
-            onClick={handleRequestPermission}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-950 rounded-xl font-bold transition-all text-sm shrink-0"
+            onClick={() => setIsFormOpen(!isFormOpen)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer shadow-lg ${
+              isFormOpen
+                ? 'bg-[#2a2a2c] text-gray-300 hover:bg-[#333] border border-[#3d3d3d]'
+                : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/20'
+            }`}
           >
-            <ShieldAlert size={16} /> Enable Notifications
+            {isFormOpen ? (
+              <>
+                <X size={15} /> Close Form
+              </>
+            ) : (
+              <>
+                <Plus size={15} /> Create New Alarm
+              </>
+            )}
           </button>
-        ) : (
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-medium text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            System notifications active
-          </div>
-        )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* ADD REMINDER CARD (2 columns wide) */}
-        <div className="md:col-span-2 p-6 rounded-2xl bg-[#252526] border border-[#2d2d2d] shadow-xl space-y-6">
-          <h3 className="font-bold text-gray-100 flex items-center gap-2">
-            <Plus size={18} className="text-purple-400" />
-            Create Custom Reminder
-          </h3>
+      {/* EXPANDABLE CREATE ALARM FORM */}
+      {isFormOpen && (
+        <div className="p-6 rounded-2xl bg-[#252526] border border-[#2d2d2d] shadow-2xl space-y-5 animate-fadeIn">
+          <div className="flex items-center justify-between border-b border-[#2d2d2d] pb-3">
+            <h3 className="font-bold text-gray-100 flex items-center gap-2 text-sm">
+              <Plus size={16} className="text-purple-400" />
+              Create Custom Reminder / Alarm
+            </h3>
+            <button
+              onClick={() => setIsFormOpen(false)}
+              className="p-1 hover:bg-[#333] text-gray-400 rounded-lg transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
 
           <form onSubmit={handleAddReminder} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase text-gray-400 tracking-wider">Reminder Title</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Meditate, Drink Water, Stand Up"
-                className="w-full bg-[#1e1e1e] text-gray-100 border border-[#2d2d2d] rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 transition-colors text-sm"
-              />
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-gray-400 tracking-wider">Reminder Title *</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Meditate, Drink Water, Stand Up"
+                  className="w-full bg-[#1e1e1e] text-gray-100 border border-[#2d2d2d] rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 transition-colors text-sm"
+                  required
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase text-gray-400 tracking-wider">Short Note</label>
-              <input
-                type="text"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Optional description..."
-                className="w-full bg-[#1e1e1e] text-gray-100 border border-[#2d2d2d] rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 transition-colors text-sm"
-              />
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-gray-400 tracking-wider">Short Note (Optional)</label>
+                <input
+                  type="text"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Optional description..."
+                  className="w-full bg-[#1e1e1e] text-gray-100 border border-[#2d2d2d] rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 transition-colors text-sm"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"
-                onClick={() => setType('once')}
-                className={`p-3 rounded-xl border text-sm font-semibold transition-all flex flex-col items-center gap-1.5 ${
-                  type === 'once'
-                    ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                onClick={() => setType('daily')}
+                className={`p-3 rounded-xl border text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  type === 'daily'
+                    ? 'border-purple-500 bg-purple-500/10 text-purple-300 shadow-sm'
                     : 'border-[#2d2d2d] hover:bg-[#1e1e1e] text-gray-400'
                 }`}
               >
-                <Calendar size={18} />
-                One-Time Event
+                <Clock size={16} />
+                Daily Routine Alarm
               </button>
 
               <button
                 type="button"
-                onClick={() => setType('daily')}
-                className={`p-3 rounded-xl border text-sm font-semibold transition-all flex flex-col items-center gap-1.5 ${
-                  type === 'daily'
-                    ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                onClick={() => setType('once')}
+                className={`p-3 rounded-xl border text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  type === 'once'
+                    ? 'border-purple-500 bg-purple-500/10 text-purple-300 shadow-sm'
                     : 'border-[#2d2d2d] hover:bg-[#1e1e1e] text-gray-400'
                 }`}
               >
-                <Clock size={18} />
-                Daily Routine Alarm
+                <Calendar size={16} />
+                One-Time Event
               </button>
             </div>
 
             {type === 'daily' ? (
-              <div>
+              <div className="bg-[#1e1e1e] border border-[#2d2d2d] rounded-xl p-4">
                 <TimePicker
                   value={time}
                   onChange={(val) => setTime(val)}
@@ -287,8 +303,8 @@ export function ReminderView({ pageId }: { pageId: string }) {
                 />
               </div>
             ) : (
-              <div className="space-y-1.5 flex flex-col items-center">
-                <label className="text-xs font-black uppercase text-gray-400 tracking-wider self-start">Choose Date & Time</label>
+              <div className="space-y-1.5 bg-[#1e1e1e] border border-[#2d2d2d] rounded-xl p-4 flex flex-col items-center">
+                <label className="text-xs font-black uppercase text-gray-400 tracking-wider self-start mb-2">Choose Date & Time</label>
                 <CalendarDateTimePicker
                   value={dateTime}
                   onChange={(val) => setDateTime(val)}
@@ -296,88 +312,35 @@ export function ReminderView({ pageId }: { pageId: string }) {
               </div>
             )}
 
-            <button
-              type="submit"
-              className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
-            >
-              <Bell size={16} /> Schedule Reminder
-            </button>
+            <div className="flex gap-3 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="px-4 py-2.5 bg-[#1a1a1a] hover:bg-[#222] text-gray-400 hover:text-white border border-[#2d2d2d] rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all text-xs flex items-center gap-2 shadow-lg shadow-purple-600/20 cursor-pointer"
+              >
+                <Bell size={14} /> Schedule Reminder
+              </button>
+            </div>
           </form>
         </div>
+      )}
 
-        {/* PRESETS SIDEBAR CARD */}
-        <div className="p-6 rounded-2xl bg-[#252526] border border-[#2d2d2d] shadow-xl space-y-6">
-          <h3 className="font-bold text-gray-100 flex items-center gap-2">
-            <Sparkles size={18} className="text-amber-400" />
-            Quick Presets
-          </h3>
-          <p className="text-xs text-gray-400">Tap to instantly schedule one of our default recommended reminders:</p>
-
-          <div className="space-y-3">
-            <button
-              onClick={() => handleAddPreset('Morning Wakeup Alarm', '07:00', true)}
-              className="w-full p-3 bg-[#1e1e1e] hover:bg-purple-950/20 border border-[#2d2d2d] hover:border-purple-500/40 rounded-xl text-left transition-all space-y-1"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-gray-200">Morning Wakeup</span>
-                <Clock size={14} className="text-purple-400" />
-              </div>
-              <p className="text-xs text-gray-400">Daily routine alert at 7:00 AM</p>
-            </button>
-
-            <button
-              onClick={() => handleAddPreset('Midday Habit Check-in', '13:00', true)}
-              className="w-full p-3 bg-[#1e1e1e] hover:bg-purple-950/20 border border-[#2d2d2d] hover:border-purple-500/40 rounded-xl text-left transition-all space-y-1"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-gray-200">Habit Check-in</span>
-                <Clock size={14} className="text-purple-400" />
-              </div>
-              <p className="text-xs text-gray-400">Daily check-in alert at 1:00 PM</p>
-            </button>
-
-            <button
-              onClick={() => handleAddPreset('Evening Wind-down', '22:00', true)}
-              className="w-full p-3 bg-[#1e1e1e] hover:bg-purple-950/20 border border-[#2d2d2d] hover:border-purple-500/40 rounded-xl text-left transition-all space-y-1"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-gray-200">Evening Wind-down</span>
-                <Clock size={14} className="text-purple-400" />
-              </div>
-              <p className="text-xs text-gray-400">Daily routine winddown at 10:00 PM</p>
-            </button>
-
-            <button
-              onClick={() => handleAddPreset('Quick 5-Min Stretch Break', '', false)}
-              className="w-full p-3 bg-[#1e1e1e] hover:bg-purple-950/20 border border-[#2d2d2d] hover:border-purple-500/40 rounded-xl text-left transition-all space-y-1"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-gray-200">5-Min Stretch Break</span>
-                <Calendar size={14} className="text-amber-400" />
-              </div>
-              <p className="text-xs text-gray-400">One-time quick countdown trigger</p>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* SCHEDULED REMINDERS LIST */}
-      <div className="p-6 rounded-2xl bg-[#252526] border border-[#2d2d2d] shadow-xl space-y-6">
-        <div className="flex items-center justify-between border-b border-[#2d2d2d] pb-4">
-          <h3 className="font-bold text-gray-100 flex items-center gap-2">
-            <Clock size={18} className="text-purple-400" />
-            Scheduled Active Alarms ({reminders.length})
-          </h3>
-        </div>
-
+      {/* CURRENT ALARMS LIST */}
+      <div className="p-6 rounded-2xl bg-[#252526] border border-[#2d2d2d] shadow-xl space-y-4">
         {loading ? (
-          <div className="py-12 text-center text-gray-500 animate-pulse">Loading alarms...</div>
+          <div className="py-12 text-center text-gray-500 animate-pulse text-xs font-bold">Loading alarms...</div>
         ) : reminders.length === 0 ? (
           <div className="py-12 text-center border-2 border-dashed border-[#2d2d2d] rounded-xl flex flex-col items-center justify-center gap-3">
             <AlertCircle size={32} className="text-gray-500" />
             <div className="space-y-1">
               <p className="font-semibold text-gray-300">No Reminders Scheduled</p>
-              <p className="text-xs text-gray-500">Create a new alarm above or pick a quick preset.</p>
+              <p className="text-xs text-gray-500">Click &quot;Create New Alarm&quot; above to set one up.</p>
             </div>
           </div>
         ) : (
@@ -393,31 +356,32 @@ export function ReminderView({ pageId }: { pageId: string }) {
               >
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-200 truncate">{reminder.title}</span>
+                    <span className="font-bold text-gray-200 truncate text-sm">{reminder.title}</span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                       reminder.type === 'daily'
-                        ? 'bg-blue-500/10 text-blue-400'
-                        : 'bg-emerald-500/10 text-emerald-400'
+                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                     }`}>
-                      {reminder.type}
+                      {reminder.type === 'daily' ? 'DAILY' : 'ONCE'}
                     </span>
                   </div>
                   {reminder.body && <p className="text-xs text-gray-400 truncate">{reminder.body}</p>}
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <Clock size={12} />
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400 pt-1">
+                    <Clock size={13} className="text-purple-400" />
                     {reminder.type === 'daily' ? (
-                      <span>Every day at <strong className="text-purple-400">{reminder.time}</strong></span>
+                      <span>Every day at <strong className="text-purple-300 font-bold">{reminder.time}</strong></span>
                     ) : (
-                      <span>Runs once on <strong className="text-purple-400">{format(new Date(reminder.dateTime || Date.now()), 'MMM d, h:mm a')}</strong></span>
+                      <span>Runs once on <strong className="text-purple-300 font-bold">{format(new Date(reminder.dateTime || Date.now()), 'MMM d, h:mm a')}</strong></span>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 shrink-0">
                   {/* Toggle active switch */}
                   <button
                     onClick={() => handleToggleReminder(reminder)}
-                    className={`w-10 h-5 rounded-full p-0.5 transition-colors relative ${
+                    title={reminder.active ? "Deactivate alarm" : "Activate alarm"}
+                    className={`w-10 h-5 rounded-full p-0.5 transition-colors relative cursor-pointer ${
                       reminder.active ? 'bg-purple-600' : 'bg-gray-700'
                     }`}
                   >
@@ -428,7 +392,8 @@ export function ReminderView({ pageId }: { pageId: string }) {
 
                   <button
                     onClick={() => handleDeleteReminder(reminder.id)}
-                    className="p-1.5 hover:bg-[#2a2a2b] rounded-lg text-gray-400 hover:text-red-400 transition-colors"
+                    title="Delete alarm"
+                    className="p-1.5 hover:bg-[#2a2a2b] rounded-lg text-gray-400 hover:text-red-400 transition-colors cursor-pointer"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -533,7 +498,7 @@ function CalendarDateTimePicker({ value, onChange }: { value: string; onChange: 
         <button
           type="button"
           onClick={handlePrevMonth}
-          className="p-1 hover:bg-[#2d2d2d] rounded-md text-gray-400 hover:text-white transition-colors text-xs"
+          className="p-1 hover:bg-[#2d2d2d] rounded-md text-gray-400 hover:text-white transition-colors text-xs cursor-pointer"
         >
           &larr;
         </button>
@@ -543,7 +508,7 @@ function CalendarDateTimePicker({ value, onChange }: { value: string; onChange: 
         <button
           type="button"
           onClick={handleNextMonth}
-          className="p-1 hover:bg-[#2d2d2d] rounded-md text-gray-400 hover:text-white transition-colors text-xs"
+          className="p-1 hover:bg-[#2d2d2d] rounded-md text-gray-400 hover:text-white transition-colors text-xs cursor-pointer"
         >
           &rarr;
         </button>
@@ -578,7 +543,7 @@ function CalendarDateTimePicker({ value, onChange }: { value: string; onChange: 
                   setCurrentYear(cell.dateObj.getFullYear());
                 }
               }}
-              className={`h-[28px] w-full text-[10px] font-semibold rounded flex items-center justify-center transition-all ${
+              className={`h-[28px] w-full text-[10px] font-semibold rounded flex items-center justify-center transition-all cursor-pointer ${
                 isSelected
                   ? 'bg-purple-600 text-white shadow shadow-purple-600/30 font-bold scale-105'
                   : isToday
@@ -604,7 +569,7 @@ function CalendarDateTimePicker({ value, onChange }: { value: string; onChange: 
           <select
             value={selectedHour}
             onChange={(e) => setSelectedHour(parseInt(e.target.value))}
-            className="bg-[#111] border border-[#2d2d2d] rounded px-1.5 py-0.5 text-[10px] text-white outline-none focus:border-purple-500 transition-colors"
+            className="bg-[#111] border border-[#2d2d2d] rounded px-1.5 py-0.5 text-[10px] text-white outline-none focus:border-purple-500 transition-colors cursor-pointer"
           >
             {Array.from({ length: 24 }).map((_, h) => (
               <option key={h} value={h}>
@@ -616,7 +581,7 @@ function CalendarDateTimePicker({ value, onChange }: { value: string; onChange: 
           <select
             value={selectedMinute}
             onChange={(e) => setSelectedMinute(parseInt(e.target.value))}
-            className="bg-[#111] border border-[#2d2d2d] rounded px-1.5 py-0.5 text-[10px] text-white outline-none focus:border-purple-500 transition-colors"
+            className="bg-[#111] border border-[#2d2d2d] rounded px-1.5 py-0.5 text-[10px] text-white outline-none focus:border-purple-500 transition-colors cursor-pointer"
           >
             {Array.from({ length: 60 }).map((_, m) => (
               <option key={m} value={m}>
