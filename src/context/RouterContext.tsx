@@ -10,48 +10,47 @@ interface RouterContextType {
 
 const RouterContext = createContext<RouterContextType | undefined>(undefined);
 
+function normalizePath(raw: string): string {
+  if (!raw) return '/';
+  let path = raw;
+  if (path.startsWith('#')) {
+    path = path.substring(1);
+  }
+  if (!path.startsWith('/')) {
+    path = '/' + path;
+  }
+  return path;
+}
+
 export function RouterProvider({ children }: { children: ReactNode }) {
   // Use state to track current client-side route path
   const [pathname, setPathname] = useState<string>(() => {
-    // Synchronize with window.location.hash or fallback to '/'
-    const hash = window.location.hash;
-    if (hash && hash.startsWith('#')) {
-      return hash.substring(1);
-    }
-    return '/';
+    return normalizePath(window.location.hash);
   });
 
   const navigate = (href: string) => {
-    setPathname(href);
-    window.location.hash = href;
+    const clean = normalizePath(href);
+    setPathname(clean);
+    if (window.location.hash !== `#${clean}`) {
+      window.location.hash = clean;
+    }
   };
 
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#')) {
-        setPathname(hash.substring(1));
-      } else {
-        setPathname('/');
-      }
+      setPathname(normalizePath(window.location.hash));
     };
 
     const handleGlobalLinkClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const anchor = target.closest('a');
       if (anchor) {
-        let href = anchor.getAttribute('href');
-        if (href) {
-          // If already has hash, extract it to see if it is a page link
-          if (href.startsWith('#/page/')) {
-            href = href.substring(1);
-          }
-          if (href.startsWith('/page/')) {
-            e.preventDefault();
-            e.stopPropagation();
-            anchor.setAttribute('target', '_self');
-            navigate(href);
-          }
+        const href = anchor.getAttribute('href');
+        if (href && (href.startsWith('/') || href.startsWith('#/'))) {
+          e.preventDefault();
+          e.stopPropagation();
+          anchor.setAttribute('target', '_self');
+          navigate(href);
         }
       }
     };
@@ -88,6 +87,13 @@ export function useRouter() {
   return {
     push: (href: string) => context.navigate(href),
     replace: (href: string) => context.navigate(href),
+    back: () => {
+      if (typeof window !== 'undefined' && window.history.length > 1) {
+        window.history.back();
+      } else {
+        context.navigate('/');
+      }
+    },
   };
 }
 

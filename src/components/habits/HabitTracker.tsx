@@ -7,6 +7,7 @@ import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash,
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useRouter, usePathname } from '@/context/RouterContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modals';
 import { PageModel, HabitStats, ShopItem, InventoryItem } from '@/types';
 import { useNotification } from '@/context/NotificationContext';
@@ -172,6 +173,8 @@ export interface PageRecord {
 }
 
 export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPeek?: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const { sidePeekRecordId, setSidePeekRecordId, setSidePeekPageId } = useWorkspace();
   const [masterTasks, setMasterTasks] = useState<MasterTask[]>([]);
@@ -1618,13 +1621,9 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
             <button 
               onClick={() => {
-                setIsSettingsOpen(!isSettingsOpen);
-                setIsGamificationOpen(false);
-                setIsWeeklyTasksOpen(false);
-                setIsTodoOpen(false);
-                setIsScheduleOpen(false);
+                router.push('/settings');
               }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isSettingsOpen ? 'bg-[#252525] text-white border border-[#444] shadow-md' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${pathname === '/settings' ? 'bg-[#252525] text-white border border-[#444] shadow-md' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
             >
               <Settings size={14}/> Settings
             </button>

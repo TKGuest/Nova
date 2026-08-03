@@ -9,7 +9,7 @@ import { CalendarProvider } from '@/context/CalendarContext';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { SidePeek } from '@/components/layout/SidePeek';
-import { SettingsModal } from '@/components/settings/SettingsModal';
+import { SettingsPage } from '@/components/settings/SettingsPage';
 import { MobileLayoutWrapper } from '@/components/layout/MobileLayoutWrapper';
 import DynamicPage from '@/app/page/[pageId]/page';
 import CalendarPage from '@/app/calendar/page';
@@ -153,10 +153,13 @@ function AppContent() {
   }, [user]);
 
   // Simple, deterministic route matching
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
   let view = <Home />;
-  if (pathname === '/calendar') {
+  if (normalizedPath === '/calendar') {
     view = <CalendarPage />;
-  } else if (pathname.startsWith('/page/')) {
+  } else if (normalizedPath === '/settings') {
+    view = <SettingsPage />;
+  } else if (normalizedPath.startsWith('/page/')) {
     view = <DynamicPage />;
   }
 
@@ -174,7 +177,6 @@ function AppContent() {
         }
       />
       <SidePeek />
-      <SettingsModal />
     </div>
   );
 }

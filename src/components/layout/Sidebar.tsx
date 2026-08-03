@@ -327,7 +327,7 @@ export function Sidebar() {
               <button onClick={() => createPage('reminder')} className="w-full flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#2a2a2b] rounded-md transition-colors text-left text-sm cursor-pointer">
                 <Plus size={16} /> <span className="font-medium">New Reminder Page</span>
               </button>
-              <button onClick={() => setSettingsOpen(true)} className="w-full flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#2a2a2b] rounded-md transition-colors text-left text-sm cursor-pointer mt-2">
+              <button onClick={() => { setSettingsOpen(true); router.push('/settings'); }} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-left text-sm cursor-pointer mt-2 ${pathname === '/settings' ? 'bg-[#2a2a2b] text-white font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-[#2a2a2b]'}`}>
                 <Settings size={16} /> <span className="font-medium">Settings</span>
               </button>
             </div>
@@ -420,7 +420,7 @@ export function Sidebar() {
            
            {/* Floating FAB */}
            <div className="absolute bottom-4 right-6 flex flex-col gap-3">
-              <button onClick={() => setSettingsOpen(true)} className="bg-[#2a2a2b] p-3.5 rounded-full text-white shadow-xl flex items-center justify-center">
+              <button onClick={() => { setSettingsOpen(true); router.push('/settings'); }} className={`p-3.5 rounded-full shadow-xl flex items-center justify-center ${pathname === '/settings' ? 'bg-[#2383e2] text-white' : 'bg-[#2a2a2b] text-white'}`}>
                  <Settings size={24} />
               </button>
               <button onClick={() => createPage('note')} className="bg-[#2383e2] p-3.5 rounded-full text-white shadow-xl flex items-center justify-center">
