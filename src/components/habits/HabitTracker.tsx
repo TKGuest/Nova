@@ -1564,13 +1564,26 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         {!(isPeek && sidePeekRecordId) && (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-[#1a1a1a] w-full overflow-hidden">
           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 w-screen md:w-auto shrink-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <button onClick={() => setIsDatePickerOpen({})} className="flex items-center gap-1.5 px-3 py-2 bg-[#2383e2] text-white rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest hover:bg-opacity-90 transition-all shadow-lg shadow-blue-500/10 shrink-0"><Plus size={14}/> New</button>
+            <button 
+              onClick={() => {
+                setIsGamificationOpen(false);
+                setIsWeeklyTasksOpen(false);
+                setIsTodoOpen(false);
+                setIsScheduleOpen(false);
+                setIsSettingsOpen(false);
+                setSidePeekRecordId(null);
+              }} 
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${(!isGamificationOpen && !isWeeklyTasksOpen && !isTodoOpen && !isScheduleOpen && !isSettingsOpen) ? 'bg-[#2383e2] text-white shadow-lg shadow-blue-500/10' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-blue-400 border-blue-900/30'}`}
+            >
+              <CalendarIcon size={14}/> Daily Tasks
+            </button>
             <button 
               onClick={() => {
                 setIsGamificationOpen(!isGamificationOpen);
                 setIsWeeklyTasksOpen(false);
                 setIsTodoOpen(false);
                 setIsScheduleOpen(false);
+                setIsSettingsOpen(false);
               }} 
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isGamificationOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
             >
@@ -1579,22 +1592,11 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
             <button 
               onClick={() => {
-                setIsWeeklyTasksOpen(!isWeeklyTasksOpen);
-                setIsGamificationOpen(false);
-                setIsTodoOpen(false);
-                setIsScheduleOpen(false);
-              }} 
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isWeeklyTasksOpen ? 'bg-blue-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-blue-400 border-blue-900/30'}`}
-            >
-              <CalendarIcon size={14}/> Weekly Tasks
-            </button>
-
-            <button 
-              onClick={() => {
                 setIsTodoOpen(!isTodoOpen);
                 setIsGamificationOpen(false);
                 setIsWeeklyTasksOpen(false);
                 setIsScheduleOpen(false);
+                setIsSettingsOpen(false);
               }} 
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isTodoOpen ? 'bg-indigo-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-indigo-400 border-indigo-900/30'}`}
             >
@@ -1607,137 +1609,25 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 setIsGamificationOpen(false);
                 setIsWeeklyTasksOpen(false);
                 setIsTodoOpen(false);
+                setIsSettingsOpen(false);
               }} 
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isScheduleOpen ? 'bg-purple-600 text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-purple-400 border-purple-900/30'}`}
             >
               <Timer size={14}/> Schedule
             </button>
 
-            <div className="relative shrink-0">
-              <button 
-                onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isSettingsOpen ? 'bg-[#222] text-white' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
-              >
-                <Settings size={14}/> Settings
-              </button>
-              {isSettingsOpen && (
-                <div onClick={(e) => e.stopPropagation()} className="fixed inset-4 md:inset-12 z-[100] bg-[#141414] border border-[#2d2d2d] rounded-xl shadow-2xl p-5 md:p-8 text-left overflow-y-auto custom-scrollbar max-w-4xl mx-auto">
-                  <div className="flex items-start justify-between gap-4 mb-6 pb-4 border-b border-[#2d2d2d]">
-                    <div>
-                      <h2 className="text-lg font-black text-white tracking-tight">Settings</h2>
-                      <p className="text-[11px] text-gray-500 mt-1">Dashboard tools, display preferences, and gamification rules.</p>
-                    </div>
-                    <button onClick={() => setIsSettingsOpen(false)} className="p-2 text-gray-500 hover:text-white hover:bg-[#222] rounded transition-all"><X size={18} /></button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Dashboard Tools</span>
-                    <button onClick={() => { setIsPropertyModalOpen(true); setIsSettingsOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#2d2d2d] text-gray-400 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer"><Settings2 size={16}/> Manage Properties</button>
-                    <button onClick={() => { setIsDefaultCoverModalOpen(true); setIsSettingsOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#2d2d2d] text-gray-400 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer"><ImageIcon size={16}/> Default Card Cover</button>
-                  </div>
-                  <div className="space-y-3">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Counter Format</span>
-                    <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-                      <button onClick={() => setCounterFormat('fraction')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${counterFormat === 'fraction' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Fraction</button>
-                      <button onClick={() => setCounterFormat('percent')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${counterFormat === 'percent' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Percent</button>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Text Scaling</span>
-                    <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-                      <button onClick={() => setTextSize('small')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'small' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A</button>
-                      <button onClick={() => setTextSize('medium')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'medium' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A+</button>
-                      <button onClick={() => setTextSize('large')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'large' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>A++</button>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Long Tasks Display</span>
-                    <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-                      <button onClick={() => setTextTruncateMode('wrap')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${textTruncateMode === 'wrap' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Wrap</button>
-                      <button onClick={() => setTextTruncateMode('truncate')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${textTruncateMode === 'truncate' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Truncate</button>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Week Days Order</span>
-                    <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
-                      <button onClick={() => setDaysSorting('chrono')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${daysSorting === 'chrono' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Monday-Sunday</button>
-                      <button onClick={() => setDaysSorting('reverse')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${daysSorting === 'reverse' ? 'bg-[#222] text-blue-400' : 'text-gray-600'}`}>Sunday, Sat, Fri...</button>
-                    </div>
-                  </div>
-                  <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">All Habits Daily Bonus</span>
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between bg-[#111] border border-[#2d2d2d] rounded px-3 py-2">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">Bonus Points</span>
-                        <input 
-                          type="number" 
-                          className="bg-transparent text-right outline-none text-white text-[11px] font-medium w-16"
-                          value={gamificationStats?.allHabitsBonus ?? 50}
-                          onChange={async (e) => {
-                            if (!user) return;
-                            const nextVal = parseInt(e.target.value) || 0;
-                            const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
-                            await updateDoc(statsRef, { allHabitsBonus: nextVal });
-                          }}
-                          onWheel={(e) => e.currentTarget.blur()}
-                        />
-                      </div>
-                      <span className="text-[9px] text-gray-600 leading-normal block">Earned when all daily main habits are successfully completed.</span>
-                    </div>
-                  </div>
-                  <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Weekly Reset Day</span>
-                    <div className="flex flex-col gap-1.5 w-fit">
-                      <div className="flex items-center gap-3 bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 cursor-pointer hover:border-purple-500/50 transition-all">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Reset On</span>
-                        <select
-                          className="bg-transparent text-left outline-none text-white text-[10px] font-black uppercase tracking-widest cursor-pointer pr-1"
-                          value={gamificationStats?.weeklyResetDay ?? 1}
-                          onChange={async (e) => {
-                            if (!user) return;
-                            const nextVal = parseInt(e.target.value);
-                            const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
-                            await updateDoc(statsRef, { weeklyResetDay: nextVal });
-                          }}
-                        >
-                          <option value={1} className="bg-[#1e1e1e] text-white">MONDAY</option>
-                          <option value={2} className="bg-[#1e1e1e] text-white">TUESDAY</option>
-                          <option value={3} className="bg-[#1e1e1e] text-white">WEDNESDAY</option>
-                          <option value={4} className="bg-[#1e1e1e] text-white">THURSDAY</option>
-                          <option value={5} className="bg-[#1e1e1e] text-white">FRIDAY</option>
-                          <option value={6} className="bg-[#1e1e1e] text-white">SATURDAY</option>
-                          <option value={0} className="bg-[#1e1e1e] text-white">SUNDAY</option>
-                        </select>
-                      </div>
-                      <span className="text-[9px] text-gray-600 leading-normal block">Decides which day of the week your weekly tasks reset.</span>
-                    </div>
-                  </div>
-                  <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3 md:col-span-2">
-                    <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Gamification Rules</span>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <SettingsNumberInput label="Point Decay" description="Points lost per missed day." value={gamificationStats?.decayValue ?? 5} onCommit={async (value) => {
-                        if (!user) return;
-                        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { decayValue: value });
-                      }} />
-                      <SettingsNumberInput label="Daily Point Cap" description="Maximum positive points per day." value={gamificationStats?.dailyPointCap ?? 200} onCommit={async (value) => {
-                        if (!user) return;
-                        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { dailyPointCap: value });
-                      }} />
-                      <SettingsNumberInput 
-                        label="Streak Target Tasks" 
-                        description="Daily tasks needed for streak." 
-                        value={gamificationStats?.streakTargetTasks ?? 1} 
-                        onCommit={async (value) => {
-                          if (!user) return;
-                          await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakTargetTasks: value });
-                        }} 
-                      />
-                    </div>
-                  </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <button 
+              onClick={() => {
+                setIsSettingsOpen(!isSettingsOpen);
+                setIsGamificationOpen(false);
+                setIsWeeklyTasksOpen(false);
+                setIsTodoOpen(false);
+                setIsScheduleOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all shrink-0 ${isSettingsOpen ? 'bg-[#252525] text-white border border-[#444] shadow-md' : 'bg-[#1a1a1a] border border-[#2d2d2d] text-gray-400 hover:text-white'}`}
+            >
+              <Settings size={14}/> Settings
+            </button>
 
             <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#1a1a1a] shrink-0 ml-auto md:ml-4">
               <button onClick={() => setViewMode('table')} className={`px-2.5 py-1.5 rounded-md flex items-center gap-1 md:gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-tighter ${viewMode === 'table' ? 'bg-[#222] text-white' : 'text-gray-500 hover:text-gray-300'}`}><TableIcon size={12}/> Table</button>
@@ -1779,6 +1669,135 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
               weeklyResetDay={gamificationStats?.weeklyResetDay ?? 1}
               onClose={() => setIsScheduleOpen(false)}
             />
+          ) : isSettingsOpen ? (
+            <div className="p-5 md:p-8 bg-[#111] border border-[#2d2d2d] rounded-xl text-left shadow-xl w-full min-h-[400px]">
+              <div className="flex items-start justify-between gap-4 mb-6 pb-4 border-b border-[#2d2d2d]">
+                <div>
+                  <h2 className="text-lg font-black text-white tracking-tight">Settings</h2>
+                  <p className="text-[11px] text-gray-500 mt-1">Dashboard tools, display preferences, and gamification rules.</p>
+                </div>
+                <button 
+                  onClick={() => setIsSettingsOpen(false)} 
+                  className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-400 hover:text-white bg-[#1a1a1a] hover:bg-[#222] border border-[#2d2d2d] rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <X size={14} /> Back to Dashboard
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Dashboard Tools</span>
+                  <button onClick={() => { setIsPropertyModalOpen(true); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#161616] border border-[#2d2d2d] text-gray-300 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer"><Settings2 size={16}/> Manage Properties</button>
+                  <button onClick={() => { setIsDefaultCoverModalOpen(true); }} className="w-full flex items-center gap-3 px-4 py-2.5 bg-[#161616] border border-[#2d2d2d] text-gray-300 rounded-md text-[11px] font-black uppercase tracking-widest hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer"><ImageIcon size={16}/> Default Card Cover</button>
+                </div>
+
+                <div className="space-y-3">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Counter Format</span>
+                  <div className="flex bg-[#161616] rounded-md p-1 border border-[#2d2d2d]">
+                    <button onClick={() => setCounterFormat('fraction')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${counterFormat === 'fraction' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>Fraction</button>
+                    <button onClick={() => setCounterFormat('percent')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${counterFormat === 'percent' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>Percent</button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Text Scaling</span>
+                  <div className="flex bg-[#161616] rounded-md p-1 border border-[#2d2d2d]">
+                    <button onClick={() => setTextSize('small')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'small' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>A</button>
+                    <button onClick={() => setTextSize('medium')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'medium' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>A+</button>
+                    <button onClick={() => setTextSize('large')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase rounded transition-all cursor-pointer ${textSize === 'large' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>A++</button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Long Tasks Display</span>
+                  <div className="flex bg-[#161616] rounded-md p-1 border border-[#2d2d2d]">
+                    <button onClick={() => setTextTruncateMode('wrap')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${textTruncateMode === 'wrap' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>Wrap</button>
+                    <button onClick={() => setTextTruncateMode('truncate')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${textTruncateMode === 'truncate' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>Truncate</button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Week Days Order</span>
+                  <div className="flex bg-[#161616] rounded-md p-1 border border-[#2d2d2d]">
+                    <button onClick={() => setDaysSorting('chrono')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${daysSorting === 'chrono' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>Monday-Sunday</button>
+                    <button onClick={() => setDaysSorting('reverse')} className={`flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all cursor-pointer ${daysSorting === 'reverse' ? 'bg-[#252525] text-blue-400 font-bold' : 'text-gray-500'}`}>Sunday, Sat, Fri...</button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">All Habits Daily Bonus</span>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between bg-[#161616] border border-[#2d2d2d] rounded px-3 py-2">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Bonus Points</span>
+                      <input 
+                        type="number" 
+                        className="bg-transparent text-right outline-none text-white text-[11px] font-medium w-16"
+                        value={gamificationStats?.allHabitsBonus ?? 50}
+                        onChange={async (e) => {
+                          if (!user) return;
+                          const nextVal = parseInt(e.target.value) || 0;
+                          const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+                          await updateDoc(statsRef, { allHabitsBonus: nextVal });
+                        }}
+                        onWheel={(e) => e.currentTarget.blur()}
+                      />
+                    </div>
+                    <span className="text-[9px] text-gray-600 leading-normal block">Earned when all daily main habits are successfully completed.</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Weekly Reset Day</span>
+                  <div className="flex flex-col gap-1.5 w-fit">
+                    <div className="flex items-center gap-3 bg-[#161616] border border-[#2d2d2d] rounded px-3 py-2 cursor-pointer hover:border-purple-500/50 transition-all">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Reset On</span>
+                      <select
+                        className="bg-transparent text-left outline-none text-white text-[10px] font-black uppercase tracking-widest cursor-pointer pr-1"
+                        value={gamificationStats?.weeklyResetDay ?? 1}
+                        onChange={async (e) => {
+                          if (!user) return;
+                          const nextVal = parseInt(e.target.value);
+                          const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+                          await updateDoc(statsRef, { weeklyResetDay: nextVal });
+                        }}
+                      >
+                        <option value={1} className="bg-[#1e1e1e] text-white">MONDAY</option>
+                        <option value={2} className="bg-[#1e1e1e] text-white">TUESDAY</option>
+                        <option value={3} className="bg-[#1e1e1e] text-white">WEDNESDAY</option>
+                        <option value={4} className="bg-[#1e1e1e] text-white">THURSDAY</option>
+                        <option value={5} className="bg-[#1e1e1e] text-white">FRIDAY</option>
+                        <option value={6} className="bg-[#1e1e1e] text-white">SATURDAY</option>
+                        <option value={0} className="bg-[#1e1e1e] text-white">SUNDAY</option>
+                      </select>
+                    </div>
+                    <span className="text-[9px] text-gray-600 leading-normal block">Decides which day of the week your weekly tasks reset.</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3 md:col-span-2">
+                  <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Gamification Rules</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <SettingsNumberInput label="Point Decay" description="Points lost per missed day." value={gamificationStats?.decayValue ?? 5} onCommit={async (value) => {
+                      if (!user) return;
+                      await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { decayValue: value });
+                    }} />
+                    <SettingsNumberInput label="Daily Point Cap" description="Maximum positive points per day." value={gamificationStats?.dailyPointCap ?? 200} onCommit={async (value) => {
+                      if (!user) return;
+                      await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { dailyPointCap: value });
+                    }} />
+                    <SettingsNumberInput 
+                      label="Streak Target Tasks" 
+                      description="Daily tasks needed for streak." 
+                      value={gamificationStats?.streakTargetTasks ?? 1} 
+                      onCommit={async (value) => {
+                        if (!user) return;
+                        await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakTargetTasks: value });
+                      }} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : isPeek && sidePeekRecordId ? (
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
               {records.filter(r => r.id === sidePeekRecordId).map(record => {

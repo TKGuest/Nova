@@ -5,7 +5,7 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc, updateDoc, collection, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { HabitStats, InventoryItem } from '@/types';
-import { Shield, Timer, Play, ShoppingBag, Sparkles, Package, Receipt, History, RotateCcw } from 'lucide-react';
+import { Shield, Timer, Play, ShoppingBag, Sparkles, Package, Receipt, History, RotateCcw, Trash2 } from 'lucide-react';
 import { useNotification } from '@/context/NotificationContext';
 import { format } from 'date-fns';
 
@@ -24,7 +24,7 @@ export function GamificationDashboard({
   const [activeTimer, setActiveTimer] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'today' | 'history'>('today');
-  const [purchaseHistory, setPurchaseHistory] = useState<{ id: string; name: string; cost: number; type: string; purchasedAt: string; reverted?: boolean }[]>([]);
+  const [purchaseHistory, setPurchaseHistory] = useState<{ id: string; name: string; cost: number; type: string; purchasedAt: string; reverted?: boolean; spendingItemId?: string }[]>([]);
 
   useEffect(() => {
     if (!user || !pageId) return;
@@ -337,6 +337,27 @@ export function GamificationDashboard({
     }
   };
 
+  const handleDeletePurchaseLog = async (logId: string, spendingItemId?: string) => {
+    if (!user) return;
+    try {
+      const { deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, 'users', user.uid, 'pages', pageId, 'purchase_log', logId));
+
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const spendingRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', `spending_${todayStr}`);
+      const targetId = spendingItemId || logId;
+      const nextSpentToday = spentToday.filter(i => i.id !== targetId);
+      if (nextSpentToday.length !== spentToday.length) {
+        await updateDoc(spendingRef, { items: nextSpentToday }).catch(() => {});
+      }
+
+      showToast('Deleted spending history log.', 'success');
+    } catch (err) {
+      console.error("Delete purchase log error:", err);
+      showToast('Error deleting log entry.', 'error');
+    }
+  };
+
   return (
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
       {/* Left Column: Stats */}
@@ -473,14 +494,21 @@ export function GamificationDashboard({
                     </div>
                     <span className="text-[10px] text-gray-600 block mt-1">{format(new Date(item.purchasedAt), 'h:mm a')}</span>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs font-black text-purple-300 shrink-0">{item.cost} pts</span>
                     <button 
                       onClick={() => handleRevertPurchase(item)}
                       className="p-1 px-2 text-[9px] font-black uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded border border-red-500/20 transition-all flex items-center gap-1 cursor-pointer"
-                      title="Revert Purchase"
+                      title="Revert Purchase & Refund Points"
                     >
                       <RotateCcw size={10} /> Revert
+                    </button>
+                    <button 
+                      onClick={() => handleDeletePurchaseLog(item.id, item.id)}
+                      className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all cursor-pointer"
+                      title="Delete History Log"
+                    >
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -512,6 +540,13 @@ export function GamificationDashboard({
                     ) : (
                       <span className="text-xs font-black text-purple-300">{item.cost} pts</span>
                     )}
+                    <button 
+                      onClick={() => handleDeletePurchaseLog(item.id, item.spendingItemId)}
+                      className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all cursor-pointer"
+                      title="Delete History Log"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 </div>
               ))}

@@ -15,7 +15,24 @@ import {
   addMonths,
   subMonths
 } from 'date-fns';
-import { Plus, Trash2, Edit2, Check, X, Calendar, Clock, Sparkles, Award, Bell, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+  Plus, 
+  Trash2, 
+  Edit2, 
+  Check, 
+  X, 
+  Calendar, 
+  Clock, 
+  Sparkles, 
+  Award, 
+  Bell, 
+  HelpCircle, 
+  ChevronLeft, 
+  ChevronRight,
+  Repeat,
+  Zap,
+  RotateCcw
+} from 'lucide-react';
 import { TimePicker } from '@/components/ui/TimePicker';
 import { HabitStats } from '@/types';
 import { doc, setDoc, deleteDoc, updateDoc, collection, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
@@ -25,7 +42,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { useNotification } from '@/context/NotificationContext';
 import { playDing } from '@/lib/sounds';
 
-interface TodoItem {
+export type TaskType = 'once' | 'repetitive';
+export type ResetIntervalOption = 'every_day' | 'every_3_days' | 'every_week' | 'every_2_weeks' | 'every_month' | 'custom';
+
+export interface TodoItem {
   id: string;
   title: string;
   notes?: string;
@@ -36,6 +56,33 @@ interface TodoItem {
   reminderEnabled?: boolean;
   pointsValue?: number;
   completedAt?: number;
+  
+  // Repetitive / Fused Weekly Task fields
+  taskType?: TaskType;                      // 'once' | 'repetitive'
+  resetInterval?: ResetIntervalOption;      // 'every_day' | 'every_3_days' | 'every_week' | 'every_2_weeks' | 'every_month' | 'custom'
+  resetIntervalDays?: number;               // 1, 3, 7, 14, 30, or custom N
+  lastCompletedAt?: number;                 // Timestamp when task was last checked
+  nextResetAt?: number;                     // Timestamp when task will auto-reset to active
+}
+
+export function getResetDays(interval?: ResetIntervalOption, customDays?: number): number {
+  if (interval === 'every_day') return 1;
+  if (interval === 'every_3_days') return 3;
+  if (interval === 'every_week') return 7;
+  if (interval === 'every_2_weeks') return 14;
+  if (interval === 'every_month') return 30;
+  if (interval === 'custom') return Math.max(1, customDays || 1);
+  return 7;
+}
+
+export function getResetLabel(interval?: ResetIntervalOption, customDays?: number): string {
+  if (interval === 'every_day') return 'Every Day';
+  if (interval === 'every_3_days') return 'Every 3 Days';
+  if (interval === 'every_week') return 'Every Week';
+  if (interval === 'every_2_weeks') return 'Every 2 Weeks';
+  if (interval === 'every_month') return 'Every Month';
+  if (interval === 'custom') return `Every ${customDays || 1} Days`;
+  return 'Every Week';
 }
 
 interface DatePickerProps {
@@ -129,7 +176,6 @@ export function DatePicker({ selectedDate, onChange, label }: DatePickerProps) {
 
       {isOpen && (
         <div className="absolute z-50 mt-1 bg-[#161616] border border-[#2d2d2d] rounded-xl p-3 shadow-2xl w-64 animate-in fade-in zoom-in-95 duration-150 right-0 md:left-0">
-          {/* Top No Date Option */}
           <button
             type="button"
             onClick={handleClear}
@@ -142,7 +188,6 @@ export function DatePicker({ selectedDate, onChange, label }: DatePickerProps) {
             No Due Date
           </button>
 
-          {/* Calendar Header */}
           <div className="flex items-center justify-between mb-3 pt-1 border-t border-[#222]">
             <button
               type="button"
@@ -163,7 +208,6 @@ export function DatePicker({ selectedDate, onChange, label }: DatePickerProps) {
             </button>
           </div>
 
-          {/* Weekday headers */}
           <div className="grid grid-cols-7 gap-1 text-center mb-1">
             {weekDays.map(d => (
               <span key={d} className="text-[9px] font-black uppercase text-gray-600">
@@ -172,7 +216,6 @@ export function DatePicker({ selectedDate, onChange, label }: DatePickerProps) {
             ))}
           </div>
 
-          {/* Days Grid */}
           <div className="grid grid-cols-7 gap-1">
             {days.map((day, idx) => {
               const isCurrentMonth = isSameMonth(day, viewDate);
@@ -198,7 +241,6 @@ export function DatePicker({ selectedDate, onChange, label }: DatePickerProps) {
             })}
           </div>
 
-          {/* Action buttons */}
           {selectedDate && (
             <div className="flex justify-end border-t border-[#222] mt-2.5 pt-2">
               <button
@@ -235,7 +277,7 @@ export function TodoDashboard({
   // States
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterTab, setFilterTab] = useState<'active' | 'completed'>('active');
+  const [filterTab, setFilterTab] = useState<'all' | 'once' | 'repetitive' | 'completed'>('all');
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
 
   // Add form states
@@ -246,6 +288,9 @@ export function TodoDashboard({
   const [dueTime, setDueTime] = useState('09:00');
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [pointsValue, setPointsValue] = useState(15);
+  const [taskType, setTaskType] = useState<TaskType>('once');
+  const [resetInterval, setResetInterval] = useState<ResetIntervalOption>('every_week');
+  const [customResetDays, setCustomResetDays] = useState(7);
 
   // Edit states
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
@@ -255,6 +300,9 @@ export function TodoDashboard({
   const [editDueTime, setEditDueTime] = useState('');
   const [editReminderEnabled, setEditReminderEnabled] = useState(false);
   const [editPointsValue, setEditPointsValue] = useState(15);
+  const [editTaskType, setEditTaskType] = useState<TaskType>('once');
+  const [editResetInterval, setEditResetInterval] = useState<ResetIntervalOption>('every_week');
+  const [editCustomResetDays, setEditCustomResetDays] = useState(7);
 
   // Check browser notification permission
   useEffect(() => {
@@ -300,6 +348,32 @@ export function TodoDashboard({
     return () => unsub();
   }, [user, pageId]);
 
+  // Auto-reset check for repetitive tasks whose nextResetAt has elapsed
+  useEffect(() => {
+    if (!todos || todos.length === 0 || !user || !pageId) return;
+
+    const now = Date.now();
+    todos.forEach(async (todo) => {
+      if (todo.taskType === 'repetitive' && todo.completed) {
+        const intervalDays = todo.resetIntervalDays || getResetDays(todo.resetInterval);
+        const resetAt = todo.nextResetAt || (todo.lastCompletedAt ? todo.lastCompletedAt + (intervalDays * 24 * 60 * 60 * 1000) : 0);
+        
+        if (resetAt > 0 && now >= resetAt) {
+          try {
+            const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
+            await updateDoc(todoRef, {
+              completed: false,
+              completedAt: null,
+              nextResetAt: null
+            });
+          } catch (e) {
+            console.error('Auto reset failed for task', todo.id, e);
+          }
+        }
+      }
+    });
+  }, [todos, user, pageId]);
+
   // Create To-do task
   const handleCreateTodo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,13 +386,14 @@ export function TodoDashboard({
     try {
       const todoId = `todo_${uuidv4().substring(0, 8)}`;
       
-      // Request permission if reminder is checked and not granted
       if (reminderEnabled && permissionStatus !== 'granted') {
         const status = await Notification.requestPermission();
         setPermissionStatus(status);
       }
 
       const todoDocRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todoId);
+      const intervalDays = taskType === 'repetitive' ? getResetDays(resetInterval, customResetDays) : undefined;
+
       const newTodo: TodoItem = {
         id: todoId,
         title: title.trim(),
@@ -328,7 +403,10 @@ export function TodoDashboard({
         dueDate: dueDate || '',
         dueTime: dueDate ? dueTime : '',
         reminderEnabled: reminderEnabled && !!dueDate,
-        pointsValue
+        pointsValue,
+        taskType,
+        resetInterval: taskType === 'repetitive' ? resetInterval : undefined,
+        resetIntervalDays: intervalDays
       };
 
       await setDoc(todoDocRef, newTodo);
@@ -341,7 +419,7 @@ export function TodoDashboard({
         await setDoc(reminderRef, {
           id: `todo_${todoId}`,
           title: `To-do Reminder: ${newTodo.title}`,
-          body: newTodo.notes || 'Time to complete your one-time task!',
+          body: newTodo.notes || 'Time to complete your task!',
           type: 'once',
           dateTime: dateTimeStr,
           active: true,
@@ -356,8 +434,11 @@ export function TodoDashboard({
       setDueTime('09:00');
       setReminderEnabled(false);
       setPointsValue(15);
+      setTaskType('once');
+      setResetInterval('every_week');
+      setCustomResetDays(7);
       setIsAdding(false);
-      showToast('One-time task created!', 'success');
+      showToast(taskType === 'repetitive' ? 'Repetitive task created!' : 'One-time task created!', 'success');
     } catch (err) {
       console.error(err);
       showToast('Failed to create task', 'error');
@@ -372,11 +453,22 @@ export function TodoDashboard({
     const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
 
     try {
-      // 1. Update To-do document
-      await updateDoc(todoRef, {
+      const updateData: any = {
         completed: nextCompleted,
         completedAt: nextCompleted ? Date.now() : null
-      });
+      };
+
+      if (nextCompleted && todo.taskType === 'repetitive') {
+        const intervalDays = todo.resetIntervalDays || getResetDays(todo.resetInterval);
+        const nextReset = Date.now() + (intervalDays * 24 * 60 * 60 * 1000);
+        updateData.lastCompletedAt = Date.now();
+        updateData.nextResetAt = nextReset;
+      } else if (!nextCompleted && todo.taskType === 'repetitive') {
+        updateData.nextResetAt = null;
+      }
+
+      // 1. Update To-do document
+      await updateDoc(todoRef, updateData);
 
       // 2. Manage points with gamification stats
       const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
@@ -423,10 +515,8 @@ export function TodoDashboard({
       // 3. Update corresponding Reminder
       const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todo.id}`);
       if (nextCompleted) {
-        // If completed, deactivate the reminder
         await updateDoc(reminderRef, { active: false }).catch(() => {});
       } else {
-        // If uncompleted and reminder was active and still in future, reactivate it
         if (todo.reminderEnabled && todo.dueDate && todo.dueTime) {
           const reminderDateTime = new Date(`${todo.dueDate}T${todo.dueTime}`);
           if (isAfter(reminderDateTime, new Date())) {
@@ -442,16 +532,30 @@ export function TodoDashboard({
     }
   };
 
+  // Manual Reset Task
+  const handleManualReset = async (todo: TodoItem) => {
+    if (!user || !pageId) return;
+    try {
+      const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
+      await updateDoc(todoRef, {
+        completed: false,
+        completedAt: null,
+        nextResetAt: null
+      });
+      showToast(`"${todo.title}" reset to active!`, 'success');
+    } catch (err) {
+      showToast('Failed to reset task', 'error');
+    }
+  };
+
   // Delete To-do
   const handleDeleteTodo = async (todoId: string) => {
     if (!user || !pageId) return;
 
     try {
-      // Delete todo doc
       const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todoId);
       await deleteDoc(todoRef);
 
-      // Delete corresponding reminder doc
       const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todoId}`);
       await deleteDoc(reminderRef).catch(() => {});
 
@@ -471,6 +575,9 @@ export function TodoDashboard({
     setEditDueTime(todo.dueTime || '09:00');
     setEditReminderEnabled(todo.reminderEnabled || false);
     setEditPointsValue(todo.pointsValue ?? 15);
+    setEditTaskType(todo.taskType || 'once');
+    setEditResetInterval(todo.resetInterval || 'every_week');
+    setEditCustomResetDays(todo.resetIntervalDays || 7);
   };
 
   // Save Edit
@@ -483,6 +590,7 @@ export function TodoDashboard({
 
     try {
       const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todoId);
+      const intervalDays = editTaskType === 'repetitive' ? getResetDays(editResetInterval, editCustomResetDays) : undefined;
       
       const updatedFields: Partial<TodoItem> = {
         title: editTitle.trim(),
@@ -490,7 +598,10 @@ export function TodoDashboard({
         dueDate: editDueDate || '',
         dueTime: editDueDate ? editDueTime : '',
         reminderEnabled: editReminderEnabled && !!editDueDate,
-        pointsValue: editPointsValue
+        pointsValue: editPointsValue,
+        taskType: editTaskType,
+        resetInterval: editTaskType === 'repetitive' ? editResetInterval : undefined,
+        resetIntervalDays: intervalDays
       };
 
       await updateDoc(todoRef, updatedFields);
@@ -502,14 +613,13 @@ export function TodoDashboard({
         await setDoc(reminderRef, {
           id: `todo_${todoId}`,
           title: `To-do Reminder: ${updatedFields.title}`,
-          body: updatedFields.notes || 'Time to complete your one-time task!',
+          body: updatedFields.notes || 'Time to complete your task!',
           type: 'once',
           dateTime: dateTimeStr,
           active: true,
           createdAt: Date.now()
         });
       } else {
-        // Delete reminder if reminders disabled
         await deleteDoc(reminderRef).catch(() => {});
       }
 
@@ -522,7 +632,13 @@ export function TodoDashboard({
   };
 
   // Filter list
-  const filteredTodos = todos.filter(t => filterTab === 'completed' ? t.completed : !t.completed);
+  const filteredTodos = todos.filter(t => {
+    if (filterTab === 'completed') return t.completed;
+    if (t.completed) return false;
+    if (filterTab === 'once') return (t.taskType || 'once') === 'once';
+    if (filterTab === 'repetitive') return t.taskType === 'repetitive';
+    return true; // 'all' active
+  });
 
   return (
     <div className="text-left space-y-6">
@@ -535,23 +651,23 @@ export function TodoDashboard({
             </div>
             <div>
               <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
-                One-Time To-Do Tasks
+                To-Do & Repetitive Tasks
                 <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider border border-indigo-500/20">
-                  To-Do
+                  Fused Hub
                 </span>
               </h2>
               <p className="text-xs text-gray-400 font-semibold tracking-wide mt-0.5">
-                Organize your one-time activities, configure reminders, and earn points upon completion!
+                Manage one-time tasks alongside repetitive tasks that auto-reset on a schedule (daily, 3 days, weekly, monthly)!
               </p>
             </div>
           </div>
         </div>
 
-        {/* Browser Permission Prompt if not granted */}
+        {/* Browser Permission Prompt */}
         {permissionStatus !== 'granted' && (
           <button
             onClick={handleRequestPermission}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase text-amber-400 hover:text-white hover:bg-amber-600/20 rounded-lg transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase text-amber-400 hover:text-white hover:bg-amber-600/20 rounded-lg transition-all cursor-pointer shrink-0"
           >
             <Bell size={12} /> Enable Alarms
           </button>
@@ -560,19 +676,35 @@ export function TodoDashboard({
 
       {/* Tabs / Filters and New Task Button */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1a1a1a] pb-3">
-        <div className="flex bg-[#111] rounded-md p-1 border border-[#1a1a1a]">
+        <div className="flex flex-wrap bg-[#111] rounded-lg p-1 border border-[#1a1a1a] gap-1">
           <button
-            onClick={() => setFilterTab('active')}
-            className={`px-4 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              filterTab === 'active' ? 'bg-[#222] text-indigo-400 font-black' : 'text-gray-500 hover:text-gray-300'
+            onClick={() => setFilterTab('all')}
+            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              filterTab === 'all' ? 'bg-[#222] text-indigo-400 font-black shadow-sm' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
-            Active ({todos.filter(t => !t.completed).length})
+            All Active ({todos.filter(t => !t.completed).length})
+          </button>
+          <button
+            onClick={() => setFilterTab('once')}
+            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
+              filterTab === 'once' ? 'bg-[#222] text-indigo-400 font-black shadow-sm' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <Zap size={11} /> One-Time ({todos.filter(t => !t.completed && (t.taskType || 'once') === 'once').length})
+          </button>
+          <button
+            onClick={() => setFilterTab('repetitive')}
+            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
+              filterTab === 'repetitive' ? 'bg-[#222] text-purple-400 font-black shadow-sm' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <Repeat size={11} /> Repetitive ({todos.filter(t => !t.completed && t.taskType === 'repetitive').length})
           </button>
           <button
             onClick={() => setFilterTab('completed')}
-            className={`px-4 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              filterTab === 'completed' ? 'bg-[#222] text-indigo-400 font-black' : 'text-gray-500 hover:text-gray-300'
+            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              filterTab === 'completed' ? 'bg-[#222] text-emerald-400 font-black shadow-sm' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
             Completed ({todos.filter(t => t.completed).length})
@@ -582,9 +714,9 @@ export function TodoDashboard({
         {!isAdding && (
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#222] border border-[#2d2d2d] text-xs font-black uppercase text-indigo-400 hover:text-white hover:border-[#3d3d3d] rounded-lg transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all cursor-pointer shadow-lg shadow-indigo-600/10"
           >
-            <Plus size={14} /> Add To-Do
+            <Plus size={14} /> Add Task
           </button>
         )}
       </div>
@@ -593,7 +725,7 @@ export function TodoDashboard({
       {isAdding && (
         <form onSubmit={handleCreateTodo} className="bg-[#161616] border border-[#2d2d2d] rounded-xl p-5 space-y-4 shadow-lg animate-in slide-in-from-top-4 duration-200">
           <div className="flex items-center justify-between border-b border-[#222] pb-2">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Create One-Time Task</span>
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Create New Task</span>
             <button
               type="button"
               onClick={() => setIsAdding(false)}
@@ -603,12 +735,93 @@ export function TodoDashboard({
             </button>
           </div>
 
+          {/* Task Type Switcher */}
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider block">Task Type</label>
+            <div className="grid grid-cols-2 gap-2 max-w-md">
+              <button
+                type="button"
+                onClick={() => setTaskType('once')}
+                className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  taskType === 'once'
+                    ? 'bg-indigo-600/15 border-indigo-500 text-indigo-300'
+                    : 'bg-[#121212] border-[#2d2d2d] text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <Zap size={14} /> One-Time Task
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaskType('repetitive')}
+                className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  taskType === 'repetitive'
+                    ? 'bg-purple-600/15 border-purple-500 text-purple-300'
+                    : 'bg-[#121212] border-[#2d2d2d] text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <Repeat size={14} /> Repetitive Task
+              </button>
+            </div>
+          </div>
+
+          {/* Repetitive Settings */}
+          {taskType === 'repetitive' && (
+            <div className="p-3.5 bg-[#121212] border border-purple-900/30 rounded-xl space-y-3 animate-fadeIn">
+              <div className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider">
+                <Repeat size={14} /> Reset Frequency (How often it resets)
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                {[
+                  { key: 'every_day', label: 'Every Day', days: 1 },
+                  { key: 'every_3_days', label: 'Every 3 Days', days: 3 },
+                  { key: 'every_week', label: 'Every Week', days: 7 },
+                  { key: 'every_2_weeks', label: 'Every 2 Weeks', days: 14 },
+                  { key: 'every_month', label: 'Every Month', days: 30 },
+                  { key: 'custom', label: 'Custom', days: customResetDays }
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setResetInterval(opt.key as ResetIntervalOption)}
+                    className={`p-2 rounded-lg border text-[10px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
+                      resetInterval === opt.key
+                        ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/20'
+                        : 'bg-[#1a1a1a] border-[#2d2d2d] text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {resetInterval === 'custom' && (
+                <div className="flex items-center gap-2 pt-1 max-w-xs">
+                  <span className="text-[10px] font-black uppercase text-gray-400">Reset every</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={customResetDays}
+                    onChange={(e) => setCustomResetDays(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-20 bg-[#1a1a1a] border border-[#2d2d2d] rounded px-2 py-1 text-xs text-white text-center outline-none focus:border-purple-500"
+                  />
+                  <span className="text-[10px] font-black uppercase text-gray-400">days</span>
+                </div>
+              )}
+
+              <p className="text-[10px] text-gray-500 leading-normal">
+                Once checked off, this task automatically resets back to active every{' '}
+                <strong className="text-purple-300 font-bold">{getResetLabel(resetInterval, customResetDays)}</strong>.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Task Title *</label>
               <input
                 type="text"
-                placeholder="e.g., Pay electricity bill, Finalize slides..."
+                placeholder={taskType === 'repetitive' ? 'e.g., Weekly grocery review, Clean desk...' : 'e.g., Pay electricity bill...'}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-colors"
@@ -650,21 +863,17 @@ export function TodoDashboard({
                     setReminderEnabled(false);
                   }
                 }}
-                label="Due Date (Optional)"
+                label="Target Due Date (Optional)"
               />
             </div>
 
-            {/* Specific "Time" Section for Notification - only appears if user chooses a date */}
             {dueDate && (
               <div className="space-y-1.5 p-3.5 bg-[#121212] border border-[#222] rounded-xl flex flex-col justify-center animate-fadeIn">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Clock size={12} className="text-indigo-400" />
                   Time to Notify
                 </label>
-                <p className="text-[9px] text-gray-500 font-semibold leading-normal">
-                  Specify the exact time to trigger the alert notification on the selected due date.
-                </p>
-                <div className="flex gap-2 mt-1.5">
+                <div className="flex gap-2 mt-1">
                   <div className="flex-1">
                     <TimePicker
                       value={dueTime}
@@ -716,12 +925,13 @@ export function TodoDashboard({
             <Calendar className="mx-auto text-gray-600 mb-2.5" size={28} />
             <p className="text-xs text-gray-400 font-bold">No {filterTab} tasks found.</p>
             <p className="text-[10px] text-gray-600 mt-1 max-w-sm mx-auto leading-relaxed">
-              Create one-time items that don't crowd your daily habit streak grid, and set optional background alarm notifications!
+              Create one-time or repetitive tasks with automatic scheduled resets and optional alarm notifications!
             </p>
           </div>
         ) : (
           filteredTodos.map(todo => {
             const isEditing = editingTodoId === todo.id;
+            const isRepetitive = todo.taskType === 'repetitive';
 
             return (
               <div
@@ -729,6 +939,8 @@ export function TodoDashboard({
                 className={`flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-[#141414] border rounded-xl transition-all group gap-4 ${
                   todo.completed
                     ? 'border-[#4f46e5]/30 bg-[#4f46e5]/5 shadow-sm shadow-[#4f46e5]/5'
+                    : isRepetitive
+                    ? 'border-purple-900/30 hover:border-purple-700/50'
                     : 'border-[#2d2d2d] hover:border-[#3d3d3d]'
                 }`}
               >
@@ -750,6 +962,59 @@ export function TodoDashboard({
                   <div className="flex-1 min-w-0">
                     {isEditing ? (
                       <div className="space-y-3 bg-[#1e1e1e] p-4 rounded-xl border border-[#2d2d2d] w-full mt-1">
+                        {/* Edit Task Type */}
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-black uppercase text-gray-500">Task Type</label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditTaskType('once')}
+                              className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase cursor-pointer ${
+                                editTaskType === 'once' ? 'bg-indigo-600 text-white' : 'bg-[#121212] text-gray-400'
+                              }`}
+                            >
+                              One-Time
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditTaskType('repetitive')}
+                              className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase cursor-pointer ${
+                                editTaskType === 'repetitive' ? 'bg-purple-600 text-white' : 'bg-[#121212] text-gray-400'
+                              }`}
+                            >
+                              Repetitive
+                            </button>
+                          </div>
+                        </div>
+
+                        {editTaskType === 'repetitive' && (
+                          <div className="space-y-1 p-2 bg-[#121212] rounded border border-purple-900/30">
+                            <label className="text-[8px] font-black uppercase text-purple-400">Reset Frequency</label>
+                            <select
+                              value={editResetInterval}
+                              onChange={(e) => setEditResetInterval(e.target.value as ResetIntervalOption)}
+                              className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded px-2 py-1 text-xs text-white"
+                            >
+                              <option value="every_day">Every Day</option>
+                              <option value="every_3_days">Every 3 Days</option>
+                              <option value="every_week">Every Week</option>
+                              <option value="every_2_weeks">Every 2 Weeks</option>
+                              <option value="every_month">Every Month</option>
+                              <option value="custom">Custom Days</option>
+                            </select>
+                            {editResetInterval === 'custom' && (
+                              <input
+                                type="number"
+                                min="1"
+                                value={editCustomResetDays}
+                                onChange={(e) => setEditCustomResetDays(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded px-2 py-1 text-xs text-white mt-1"
+                                placeholder="Number of days"
+                              />
+                            )}
+                          </div>
+                        )}
+
                         <div className="space-y-1">
                           <label className="text-[8px] font-black uppercase text-gray-500">Edit Title</label>
                           <input
@@ -798,16 +1063,12 @@ export function TodoDashboard({
                           </div>
                         </div>
 
-                        {/* Specific "Time" Section for Notification - only appears if user chooses a date */}
                         {editDueDate && (
                           <div className="space-y-1.5 p-3.5 bg-[#121212] border border-[#222] rounded-xl flex flex-col justify-center animate-fadeIn">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
                               <Clock size={12} className="text-indigo-400" />
                               Time to Notify
                             </label>
-                            <p className="text-[9px] text-gray-500 font-semibold leading-normal">
-                              Specify the exact time to trigger the alert notification on the selected due date.
-                            </p>
                             <div className="flex gap-2 mt-1.5">
                               <div className="flex-1">
                                 <TimePicker
@@ -849,13 +1110,26 @@ export function TodoDashboard({
                       </div>
                     ) : (
                       <div className="flex flex-col gap-1 text-left">
-                        <span
-                          className={`text-[13.5px] font-bold tracking-tight break-words ${
-                            todo.completed ? 'text-gray-500 line-through decoration-indigo-500/30' : 'text-gray-200'
-                          }`}
-                        >
-                          {todo.title}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`text-[13.5px] font-bold tracking-tight break-words ${
+                              todo.completed ? 'text-gray-500 line-through decoration-indigo-500/30' : 'text-gray-200'
+                            }`}
+                          >
+                            {todo.title}
+                          </span>
+
+                          {/* Task Type Badge */}
+                          {isRepetitive ? (
+                            <span className="text-[9px] font-black uppercase tracking-wider text-purple-300 bg-purple-600/15 border border-purple-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                              <Repeat size={10} /> {getResetLabel(todo.resetInterval, todo.resetIntervalDays)}
+                            </span>
+                          ) : (
+                            <span className="text-[8px] font-extrabold uppercase tracking-wider text-gray-500 bg-[#1e1e1e] border border-[#2d2d2d] px-1.5 py-0.2 rounded shrink-0">
+                              One-Time
+                            </span>
+                          )}
+                        </div>
 
                         {todo.notes && (
                           <p className={`text-[11.5px] leading-relaxed break-words whitespace-pre-wrap ${todo.completed ? 'text-gray-600' : 'text-gray-400'}`}>
@@ -882,15 +1156,31 @@ export function TodoDashboard({
                               Alarm On
                             </span>
                           )}
+
+                          {/* Repetitive next reset timer info */}
+                          {isRepetitive && todo.completed && todo.nextResetAt && (
+                            <span className="flex items-center gap-1 text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                              <Clock size={10} /> Resets on {format(new Date(todo.nextResetAt), 'MMM d, h:mm a')}
+                            </span>
+                          )}
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Actions (Edit, Delete) */}
+                {/* Actions (Reset Now for completed repetitive, Edit, Delete) */}
                 {!isEditing && (
                   <div className="flex items-center gap-1.5 md:opacity-0 group-hover:opacity-100 transition-all ml-auto shrink-0 self-end md:self-center">
+                    {isRepetitive && todo.completed && (
+                      <button
+                        onClick={() => handleManualReset(todo)}
+                        className="px-2 py-1 text-[9px] font-black uppercase tracking-wider text-purple-300 bg-purple-600/20 hover:bg-purple-600/30 rounded border border-purple-500/30 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Reset task now to uncompleted"
+                      >
+                        <RotateCcw size={10} /> Reset
+                      </button>
+                    )}
                     <button
                       onClick={() => handleStartEdit(todo)}
                       className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-[#222] transition-colors"
