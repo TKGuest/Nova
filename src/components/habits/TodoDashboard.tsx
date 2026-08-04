@@ -31,7 +31,9 @@ import {
   ChevronRight,
   Repeat,
   Zap,
-  RotateCcw
+  RotateCcw,
+  ListTodo,
+  Sliders
 } from 'lucide-react';
 import { TimePicker } from '@/components/ui/TimePicker';
 import { HabitStats } from '@/types';
@@ -44,6 +46,17 @@ import { playDing } from '@/lib/sounds';
 
 export type TaskType = 'once' | 'repetitive';
 export type ResetIntervalOption = 'every_day' | 'every_3_days' | 'every_week' | 'every_2_weeks' | 'every_month' | 'custom';
+
+export interface TodoSubTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  pointsValue?: number;
+  dueDate?: string;     // YYYY-MM-DD
+  dueTime?: string;     // HH:mm
+  reminderEnabled?: boolean;
+  completedAt?: number;
+}
 
 export interface TodoItem {
   id: string;
@@ -63,6 +76,9 @@ export interface TodoItem {
   resetIntervalDays?: number;               // 1, 3, 7, 14, 30, or custom N
   lastCompletedAt?: number;                 // Timestamp when task was last checked
   nextResetAt?: number;                     // Timestamp when task will auto-reset to active
+
+  // Mini-tasks / Steps
+  subTasks?: TodoSubTask[];
 }
 
 export function getResetDays(interval?: ResetIntervalOption, customDays?: number): number {
@@ -83,6 +99,25 @@ export function getResetLabel(interval?: ResetIntervalOption, customDays?: numbe
   if (interval === 'every_month') return 'Every Month';
   if (interval === 'custom') return `Every ${customDays || 1} Days`;
   return 'Every Week';
+}
+
+export function sanitizeFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as unknown as T;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeFirestoreData(item)) as unknown as T;
+  }
+  if (typeof obj === 'object' && !(obj instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = sanitizeFirestoreData(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
 }
 
 interface DatePickerProps {
@@ -291,6 +326,7 @@ export function TodoDashboard({
   const [taskType, setTaskType] = useState<TaskType>('once');
   const [resetInterval, setResetInterval] = useState<ResetIntervalOption>('every_week');
   const [customResetDays, setCustomResetDays] = useState(7);
+  const [newSubTasks, setNewSubTasks] = useState<TodoSubTask[]>([]);
 
   // Edit states
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
@@ -303,6 +339,17 @@ export function TodoDashboard({
   const [editTaskType, setEditTaskType] = useState<TaskType>('once');
   const [editResetInterval, setEditResetInterval] = useState<ResetIntervalOption>('every_week');
   const [editCustomResetDays, setEditCustomResetDays] = useState(7);
+  const [editSubTasks, setEditSubTasks] = useState<TodoSubTask[]>([]);
+
+  // Card quick step inputs per todo ID
+  const [quickStepInputs, setQuickStepInputs] = useState<Record<string, {
+    title: string;
+    points: number;
+    dueDate: string;
+    dueTime: string;
+    reminderEnabled: boolean;
+    showDetails: boolean;
+  }>>({});
 
   // Check browser notification permission
   useEffect(() => {
@@ -348,6 +395,186 @@ export function TodoDashboard({
     return () => unsub();
   }, [user, pageId]);
 
+  // Helper to sync sub-task reminders in Firestore
+  const syncSubTaskReminders = async (todoId: string, todoTitle: string, subTasks: TodoSubTask[]) => {
+    if (!user || !pageId) return;
+    for (const st of subTasks) {
+      const reminderId = `todo_${todoId}_sub_${st.id}`;
+      const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', reminderId);
+
+      if (st.reminderEnabled && st.dueDate && st.dueTime && !st.completed) {
+        const dateTimeStr = new Date(`${st.dueDate}T${st.dueTime}`).toISOString();
+        await setDoc(reminderRef, sanitizeFirestoreData({
+          id: reminderId,
+          title: `Step Alarm: ${st.title}`,
+          body: `Step for task: ${todoTitle}`,
+          type: 'once',
+          dateTime: dateTimeStr,
+          active: true,
+          createdAt: Date.now()
+        })).catch(console.error);
+      } else {
+        await deleteDoc(reminderRef).catch(() => {});
+      }
+    }
+  };
+
+  // Toggle individual sub-task completion
+  const handleToggleSubTask = async (todo: TodoItem, subTaskId: string) => {
+    if (!user || !pageId) return;
+    const currentSubTasks = todo.subTasks || [];
+    const targetIdx = currentSubTasks.findIndex(st => st.id === subTaskId);
+    if (targetIdx === -1) return;
+
+    const targetSt = currentSubTasks[targetIdx];
+    const nextCompleted = !targetSt.completed;
+
+    const updatedSubTasks = [...currentSubTasks];
+    updatedSubTasks[targetIdx] = {
+      ...targetSt,
+      completed: nextCompleted,
+      ...(nextCompleted ? { completedAt: Date.now() } : {})
+    };
+
+    const basePoints = targetSt.pointsValue ?? 5;
+    const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
+
+    // If all subtasks are now completed, auto-complete parent task
+    const allCompleted = updatedSubTasks.length > 0 && updatedSubTasks.every(st => st.completed);
+    const updateData: any = sanitizeFirestoreData({
+      subTasks: updatedSubTasks,
+      ...(allCompleted && !todo.completed ? {
+        completed: true,
+        completedAt: Date.now(),
+        ...(todo.taskType === 'repetitive' ? {
+          lastCompletedAt: Date.now(),
+          nextResetAt: Date.now() + ((todo.resetIntervalDays || getResetDays(todo.resetInterval)) * 24 * 60 * 60 * 1000)
+        } : {})
+      } : {})
+    });
+
+    await updateDoc(todoRef, updateData);
+
+    // Sync subtask reminder
+    const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todo.id}_sub_${subTaskId}`);
+    if (nextCompleted) {
+      await updateDoc(reminderRef, { active: false }).catch(() => {});
+    } else if (targetSt.reminderEnabled && targetSt.dueDate && targetSt.dueTime) {
+      const reminderDateTime = new Date(`${targetSt.dueDate}T${targetSt.dueTime}`);
+      if (isAfter(reminderDateTime, new Date())) {
+        await updateDoc(reminderRef, { active: true }).catch(() => {});
+      }
+    }
+
+    // Award / Deduct points
+    const statsRef = doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats');
+    const statsSnap = await getDoc(statsRef);
+    if (statsSnap.exists()) {
+      const stats = statsSnap.data() as any;
+      const multiplier = stats.streakMultiplierActive !== false ? (stats.streakMultiplier ?? 1.0) : 1.0;
+      const pointsChange = Math.round(basePoints * multiplier);
+
+      let newPoints = stats.points || 0;
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      let pointsEarnedToday = stats.pointsEarnedToday || 0;
+      if (stats.lastPointGainDate !== todayStr) pointsEarnedToday = 0;
+
+      const DAILY_CAP = stats.dailyPointCap ?? 200;
+      let actualGain = pointsChange;
+
+      if (nextCompleted) {
+        if (pointsEarnedToday + actualGain > DAILY_CAP) {
+          actualGain = Math.max(0, DAILY_CAP - pointsEarnedToday);
+        }
+        newPoints += actualGain;
+        pointsEarnedToday += actualGain;
+        playDing();
+        showPointAnnouncement(actualGain > 0 ? `+${actualGain} pts (step)` : 'Daily cap reached', actualGain);
+      } else {
+        newPoints = Math.max(0, newPoints - pointsChange);
+        pointsEarnedToday = Math.max(0, pointsEarnedToday - pointsChange);
+        showPointAnnouncement(`-${pointsChange} pts (step)`, -pointsChange);
+      }
+
+      await updateDoc(statsRef, {
+        points: newPoints,
+        pointsEarnedToday,
+        lastPointGainDate: todayStr,
+        debt: newPoints < 0
+      });
+    }
+
+    showToast(nextCompleted ? `Completed step "${targetSt.title}"!` : `Step "${targetSt.title}" active`, 'success');
+  };
+
+  // Delete individual sub-task
+  const handleDeleteSubTask = async (todo: TodoItem, subTaskId: string) => {
+    if (!user || !pageId) return;
+    const updatedSubTasks = (todo.subTasks || []).filter(st => st.id !== subTaskId);
+    const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
+    await updateDoc(todoRef, sanitizeFirestoreData({ subTasks: updatedSubTasks }));
+
+    const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todo.id}_sub_${subTaskId}`);
+    await deleteDoc(reminderRef).catch(() => {});
+
+    showToast('Step removed', 'success');
+  };
+
+  // Quick Add Sub-Task from task card
+  const handleQuickAddStep = async (todo: TodoItem) => {
+    if (!user || !pageId) return;
+    const input = quickStepInputs[todo.id];
+    if (!input || !input.title.trim()) {
+      showToast('Please enter a step title', 'error');
+      return;
+    }
+
+    const newSubTask: TodoSubTask = {
+      id: `sub_${uuidv4().substring(0, 8)}`,
+      title: input.title.trim(),
+      completed: false,
+      pointsValue: input.points ?? 5,
+      dueDate: input.dueDate || '',
+      dueTime: input.dueDate ? (input.dueTime || '09:00') : '',
+      reminderEnabled: input.reminderEnabled && !!input.dueDate
+    };
+
+    const updatedSubTasks = [...(todo.subTasks || []), newSubTask];
+    const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
+
+    const updateData: any = sanitizeFirestoreData({
+      subTasks: updatedSubTasks,
+      ...(todo.completed ? {
+        completed: false,
+        completedAt: null,
+        nextResetAt: null
+      } : {})
+    });
+
+    await updateDoc(todoRef, updateData);
+
+    if (newSubTask.reminderEnabled && newSubTask.dueDate && newSubTask.dueTime) {
+      const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todo.id}_sub_${newSubTask.id}`);
+      const dateTimeStr = new Date(`${newSubTask.dueDate}T${newSubTask.dueTime}`).toISOString();
+      await setDoc(reminderRef, sanitizeFirestoreData({
+        id: `todo_${todo.id}_sub_${newSubTask.id}`,
+        title: `Step Alarm: ${newSubTask.title}`,
+        body: `Step for task: ${todo.title}`,
+        type: 'once',
+        dateTime: dateTimeStr,
+        active: true,
+        createdAt: Date.now()
+      }));
+    }
+
+    setQuickStepInputs(prev => ({
+      ...prev,
+      [todo.id]: { title: '', points: 5, dueDate: '', dueTime: '09:00', reminderEnabled: false, showDetails: false }
+    }));
+
+    showToast(`Step "${newSubTask.title}" added!`, 'success');
+  };
+
   // Auto-reset check for repetitive tasks whose nextResetAt has elapsed
   useEffect(() => {
     if (!todos || todos.length === 0 || !user || !pageId) return;
@@ -360,12 +587,18 @@ export function TodoDashboard({
         
         if (resetAt > 0 && now >= resetAt) {
           try {
+            const resetSubTasks = (todo.subTasks || []).map(st => ({
+              ...st,
+              completed: false
+            }));
             const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
-            await updateDoc(todoRef, {
+            await updateDoc(todoRef, sanitizeFirestoreData({
               completed: false,
               completedAt: null,
-              nextResetAt: null
-            });
+              nextResetAt: null,
+              subTasks: resetSubTasks
+            }));
+            await syncSubTaskReminders(todo.id, todo.title, resetSubTasks);
           } catch (e) {
             console.error('Auto reset failed for task', todo.id, e);
           }
@@ -394,7 +627,19 @@ export function TodoDashboard({
       const todoDocRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todoId);
       const intervalDays = taskType === 'repetitive' ? getResetDays(resetInterval, customResetDays) : undefined;
 
-      const newTodo: TodoItem = {
+      const validSubTasks = newSubTasks
+        .filter(st => st.title.trim() !== '')
+        .map(st => ({
+          ...st,
+          title: st.title.trim(),
+          pointsValue: st.pointsValue ?? 5,
+          completed: false,
+          dueDate: st.dueDate || '',
+          dueTime: st.dueDate ? (st.dueTime || '09:00') : '',
+          reminderEnabled: st.reminderEnabled && !!st.dueDate
+        }));
+
+      const newTodo: TodoItem = sanitizeFirestoreData({
         id: todoId,
         title: title.trim(),
         notes: notes.trim() || '',
@@ -405,18 +650,22 @@ export function TodoDashboard({
         reminderEnabled: reminderEnabled && !!dueDate,
         pointsValue,
         taskType,
-        resetInterval: taskType === 'repetitive' ? resetInterval : undefined,
-        resetIntervalDays: intervalDays
-      };
+        ...(taskType === 'repetitive' ? {
+          resetInterval,
+          resetIntervalDays: intervalDays
+        } : {}),
+        subTasks: validSubTasks
+      });
 
       await setDoc(todoDocRef, newTodo);
+      await syncSubTaskReminders(todoId, newTodo.title, validSubTasks);
 
       // Save corresponding Reminder to reminders collection
       if (newTodo.reminderEnabled && newTodo.dueDate && newTodo.dueTime) {
         const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todoId}`);
         const dateTimeStr = new Date(`${newTodo.dueDate}T${newTodo.dueTime}`).toISOString();
         
-        await setDoc(reminderRef, {
+        await setDoc(reminderRef, sanitizeFirestoreData({
           id: `todo_${todoId}`,
           title: `To-do Reminder: ${newTodo.title}`,
           body: newTodo.notes || 'Time to complete your task!',
@@ -424,7 +673,7 @@ export function TodoDashboard({
           dateTime: dateTimeStr,
           active: true,
           createdAt: Date.now()
-        });
+        }));
       }
 
       // Reset
@@ -437,6 +686,7 @@ export function TodoDashboard({
       setTaskType('once');
       setResetInterval('every_week');
       setCustomResetDays(7);
+      setNewSubTasks([]);
       setIsAdding(false);
       showToast(taskType === 'repetitive' ? 'Repetitive task created!' : 'One-time task created!', 'success');
     } catch (err) {
@@ -453,19 +703,17 @@ export function TodoDashboard({
     const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
 
     try {
-      const updateData: any = {
+      const updateData: any = sanitizeFirestoreData({
         completed: nextCompleted,
-        completedAt: nextCompleted ? Date.now() : null
-      };
-
-      if (nextCompleted && todo.taskType === 'repetitive') {
-        const intervalDays = todo.resetIntervalDays || getResetDays(todo.resetInterval);
-        const nextReset = Date.now() + (intervalDays * 24 * 60 * 60 * 1000);
-        updateData.lastCompletedAt = Date.now();
-        updateData.nextResetAt = nextReset;
-      } else if (!nextCompleted && todo.taskType === 'repetitive') {
-        updateData.nextResetAt = null;
-      }
+        completedAt: nextCompleted ? Date.now() : null,
+        ...(nextCompleted && todo.taskType === 'repetitive' ? {
+          lastCompletedAt: Date.now(),
+          nextResetAt: Date.now() + ((todo.resetIntervalDays || getResetDays(todo.resetInterval)) * 24 * 60 * 60 * 1000)
+        } : {}),
+        ...(!nextCompleted && todo.taskType === 'repetitive' ? {
+          nextResetAt: null
+        } : {})
+      });
 
       // 1. Update To-do document
       await updateDoc(todoRef, updateData);
@@ -536,12 +784,18 @@ export function TodoDashboard({
   const handleManualReset = async (todo: TodoItem) => {
     if (!user || !pageId) return;
     try {
+      const resetSubTasks = (todo.subTasks || []).map(st => ({
+        ...st,
+        completed: false
+      }));
       const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todo.id);
-      await updateDoc(todoRef, {
+      await updateDoc(todoRef, sanitizeFirestoreData({
         completed: false,
         completedAt: null,
-        nextResetAt: null
-      });
+        nextResetAt: null,
+        subTasks: resetSubTasks
+      }));
+      await syncSubTaskReminders(todo.id, todo.title, resetSubTasks);
       showToast(`"${todo.title}" reset to active!`, 'success');
     } catch (err) {
       showToast('Failed to reset task', 'error');
@@ -558,6 +812,14 @@ export function TodoDashboard({
 
       const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todoId}`);
       await deleteDoc(reminderRef).catch(() => {});
+
+      const targetTodo = todos.find(t => t.id === todoId);
+      if (targetTodo && targetTodo.subTasks) {
+        for (const st of targetTodo.subTasks) {
+          const stReminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todoId}_sub_${st.id}`);
+          await deleteDoc(stReminderRef).catch(() => {});
+        }
+      }
 
       showToast('Task deleted!', 'success');
     } catch (err) {
@@ -578,6 +840,7 @@ export function TodoDashboard({
     setEditTaskType(todo.taskType || 'once');
     setEditResetInterval(todo.resetInterval || 'every_week');
     setEditCustomResetDays(todo.resetIntervalDays || 7);
+    setEditSubTasks(todo.subTasks ? JSON.parse(JSON.stringify(todo.subTasks)) : []);
   };
 
   // Save Edit
@@ -592,7 +855,19 @@ export function TodoDashboard({
       const todoRef = doc(db, 'users', user.uid, 'pages', pageId, 'todos', todoId);
       const intervalDays = editTaskType === 'repetitive' ? getResetDays(editResetInterval, editCustomResetDays) : undefined;
       
-      const updatedFields: Partial<TodoItem> = {
+      const validSubTasks = editSubTasks
+        .filter(st => st.title.trim() !== '')
+        .map(st => ({
+          ...st,
+          title: st.title.trim(),
+          pointsValue: st.pointsValue ?? 5,
+          completed: st.completed ?? false,
+          dueDate: st.dueDate || '',
+          dueTime: st.dueDate ? (st.dueTime || '09:00') : '',
+          reminderEnabled: st.reminderEnabled && !!st.dueDate
+        }));
+
+      const updatedFields: Partial<TodoItem> = sanitizeFirestoreData({
         title: editTitle.trim(),
         notes: editNotes.trim() || '',
         dueDate: editDueDate || '',
@@ -600,17 +875,24 @@ export function TodoDashboard({
         reminderEnabled: editReminderEnabled && !!editDueDate,
         pointsValue: editPointsValue,
         taskType: editTaskType,
-        resetInterval: editTaskType === 'repetitive' ? editResetInterval : undefined,
-        resetIntervalDays: intervalDays
-      };
+        ...(editTaskType === 'repetitive' ? {
+          resetInterval: editResetInterval,
+          resetIntervalDays: intervalDays
+        } : {
+          resetInterval: null,
+          resetIntervalDays: null
+        }),
+        subTasks: validSubTasks
+      });
 
       await updateDoc(todoRef, updatedFields);
+      await syncSubTaskReminders(todoId, updatedFields.title || '', validSubTasks);
 
       // Update corresponding Reminder
       const reminderRef = doc(db, 'users', user.uid, 'pages', pageId, 'reminders', `todo_${todoId}`);
       if (updatedFields.reminderEnabled && updatedFields.dueDate && updatedFields.dueTime) {
         const dateTimeStr = new Date(`${updatedFields.dueDate}T${updatedFields.dueTime}`).toISOString();
-        await setDoc(reminderRef, {
+        await setDoc(reminderRef, sanitizeFirestoreData({
           id: `todo_${todoId}`,
           title: `To-do Reminder: ${updatedFields.title}`,
           body: updatedFields.notes || 'Time to complete your task!',
@@ -618,7 +900,7 @@ export function TodoDashboard({
           dateTime: dateTimeStr,
           active: true,
           createdAt: Date.now()
-        });
+        }));
       } else {
         await deleteDoc(reminderRef).catch(() => {});
       }
@@ -894,6 +1176,115 @@ export function TodoDashboard({
                 </div>
               </div>
             )}
+
+            {/* Sub-Tasks / Steps Section */}
+            <div className="md:col-span-2 space-y-3 p-3.5 bg-[#121212] border border-[#282828] rounded-xl">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
+                  <ListTodo size={14} /> Mini-Tasks / Steps (Optional)
+                </label>
+                <span className="text-[9px] text-gray-500 font-semibold">
+                  Break task into steps with custom points & due alarms
+                </span>
+              </div>
+
+              {newSubTasks.length > 0 && (
+                <div className="space-y-2">
+                  {newSubTasks.map((st, idx) => (
+                    <div key={st.id || idx} className="p-2.5 bg-[#181818] border border-[#2a2a2a] rounded-lg space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-gray-500 w-4">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          value={st.title}
+                          onChange={(e) => {
+                            const updated = [...newSubTasks];
+                            updated[idx] = { ...updated[idx], title: e.target.value };
+                            setNewSubTasks(updated);
+                          }}
+                          placeholder="e.g., Step 1 description..."
+                          className="bg-[#101010] border border-[#2a2a2a] rounded px-2 py-1 text-xs text-white flex-1 outline-none focus:border-indigo-500"
+                        />
+                        <div className="flex items-center gap-1 bg-[#101010] border border-[#2a2a2a] rounded px-2 py-1 shrink-0">
+                          <Sparkles size={11} className="text-amber-400" />
+                          <input
+                            type="number"
+                            min="0"
+                            value={st.pointsValue ?? 5}
+                            onChange={(e) => {
+                              const updated = [...newSubTasks];
+                              updated[idx] = { ...updated[idx], pointsValue: parseInt(e.target.value) || 0 };
+                              setNewSubTasks(updated);
+                            }}
+                            className="w-10 bg-transparent text-xs text-white text-right outline-none font-bold"
+                          />
+                          <span className="text-[9px] font-bold text-gray-500">pts</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewSubTasks(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 pl-6 flex-wrap text-[10px]">
+                        <div className="w-36">
+                          <DatePicker
+                            selectedDate={st.dueDate || ''}
+                            onChange={(d) => {
+                              const updated = [...newSubTasks];
+                              updated[idx] = { ...updated[idx], dueDate: d, reminderEnabled: !!d && (updated[idx].reminderEnabled ?? true) };
+                              setNewSubTasks(updated);
+                            }}
+                            label=""
+                          />
+                        </div>
+                        {st.dueDate && (
+                          <>
+                            <div className="w-24">
+                              <TimePicker
+                                value={st.dueTime || '09:00'}
+                                onChange={(t) => {
+                                  const updated = [...newSubTasks];
+                                  updated[idx] = { ...updated[idx], dueTime: t };
+                                  setNewSubTasks(updated);
+                                }}
+                              />
+                            </div>
+                            <label className="flex items-center gap-1.5 px-2 py-1 bg-[#101010] border border-[#2a2a2a] rounded text-[10px] font-bold text-gray-300 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={st.reminderEnabled ?? false}
+                                onChange={(e) => {
+                                  const updated = [...newSubTasks];
+                                  updated[idx] = { ...updated[idx], reminderEnabled: e.target.checked };
+                                  setNewSubTasks(updated);
+                                }}
+                                className="rounded text-indigo-500 bg-[#222]"
+                              />
+                              <Bell size={11} className={st.reminderEnabled ? 'text-indigo-400' : 'text-gray-500'} /> Alarm
+                            </label>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setNewSubTasks(prev => [
+                  ...prev,
+                  { id: `sub_${uuidv4().substring(0,8)}`, title: '', completed: false, pointsValue: 5, dueDate: '', dueTime: '09:00', reminderEnabled: false }
+                ])}
+                className="w-full py-2 bg-[#1a1a1a] hover:bg-[#222] border border-dashed border-[#333] hover:border-[#444] rounded-lg text-xs font-bold text-indigo-400 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Plus size={14} /> Add Step / Mini-Task
+              </button>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -1091,6 +1482,115 @@ export function TodoDashboard({
                           </div>
                         )}
 
+                        {/* Edit Sub-Tasks Builder */}
+                        <div className="space-y-2.5 p-3 bg-[#121212] border border-[#2a2a2a] rounded-xl">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1">
+                              <ListTodo size={13} /> Mini-Tasks / Steps
+                            </label>
+                            <span className="text-[8px] text-gray-500">
+                              {editSubTasks.length} steps configured
+                            </span>
+                          </div>
+
+                          {editSubTasks.length > 0 && (
+                            <div className="space-y-2">
+                              {editSubTasks.map((st, idx) => (
+                                <div key={st.id || idx} className="p-2 bg-[#181818] border border-[#2a2a2a] rounded-lg space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-gray-500 w-4">{idx + 1}.</span>
+                                    <input
+                                      type="text"
+                                      value={st.title}
+                                      onChange={(e) => {
+                                        const updated = [...editSubTasks];
+                                        updated[idx] = { ...updated[idx], title: e.target.value };
+                                        setEditSubTasks(updated);
+                                      }}
+                                      placeholder="Step description..."
+                                      className="bg-[#101010] border border-[#2a2a2a] rounded px-2 py-1 text-xs text-white flex-1 outline-none"
+                                    />
+                                    <div className="flex items-center gap-1 bg-[#101010] border border-[#2a2a2a] rounded px-1.5 py-1 shrink-0">
+                                      <Sparkles size={11} className="text-amber-400" />
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={st.pointsValue ?? 5}
+                                        onChange={(e) => {
+                                          const updated = [...editSubTasks];
+                                          updated[idx] = { ...updated[idx], pointsValue: parseInt(e.target.value) || 0 };
+                                          setEditSubTasks(updated);
+                                        }}
+                                        className="w-8 bg-transparent text-xs text-white text-right outline-none font-bold"
+                                      />
+                                      <span className="text-[8px] font-bold text-gray-500">pts</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditSubTasks(prev => prev.filter((_, i) => i !== idx))}
+                                      className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 pl-6 flex-wrap text-[9px]">
+                                    <div className="w-32">
+                                      <DatePicker
+                                        selectedDate={st.dueDate || ''}
+                                        onChange={(d) => {
+                                          const updated = [...editSubTasks];
+                                          updated[idx] = { ...updated[idx], dueDate: d, reminderEnabled: !!d && (updated[idx].reminderEnabled ?? true) };
+                                          setEditSubTasks(updated);
+                                        }}
+                                        label=""
+                                      />
+                                    </div>
+                                    {st.dueDate && (
+                                      <>
+                                        <div className="w-22">
+                                          <TimePicker
+                                            value={st.dueTime || '09:00'}
+                                            onChange={(t) => {
+                                              const updated = [...editSubTasks];
+                                              updated[idx] = { ...updated[idx], dueTime: t };
+                                              setEditSubTasks(updated);
+                                            }}
+                                          />
+                                        </div>
+                                        <label className="flex items-center gap-1 px-1.5 py-0.5 bg-[#101010] border border-[#2a2a2a] rounded font-bold text-gray-300 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={st.reminderEnabled ?? false}
+                                            onChange={(e) => {
+                                              const updated = [...editSubTasks];
+                                              updated[idx] = { ...updated[idx], reminderEnabled: e.target.checked };
+                                              setEditSubTasks(updated);
+                                            }}
+                                            className="rounded text-indigo-500 bg-[#222]"
+                                          />
+                                          <Bell size={10} className={st.reminderEnabled ? 'text-indigo-400' : 'text-gray-500'} /> Alarm
+                                        </label>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setEditSubTasks(prev => [
+                              ...prev,
+                              { id: `sub_${uuidv4().substring(0,8)}`, title: '', completed: false, pointsValue: 5, dueDate: '', dueTime: '09:00', reminderEnabled: false }
+                            ])}
+                            className="w-full py-1.5 bg-[#1a1a1a] hover:bg-[#222] border border-dashed border-[#333] hover:border-[#444] rounded-lg text-[10px] font-bold text-indigo-400 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Plus size={13} /> Add Step
+                          </button>
+                        </div>
+
                         <div className="flex gap-2 justify-end pt-1">
                           <button
                             type="button"
@@ -1162,6 +1662,218 @@ export function TodoDashboard({
                             <span className="flex items-center gap-1 text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                               <Clock size={10} /> Resets on {format(new Date(todo.nextResetAt), 'MMM d, h:mm a')}
                             </span>
+                          )}
+                        </div>
+
+                        {/* Sub-Tasks Progress & Steps list */}
+                        {todo.subTasks && todo.subTasks.length > 0 && (
+                          <div className="mt-3 space-y-2 pt-2 border-t border-[#222]">
+                            <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
+                              <span className="flex items-center gap-1">
+                                <ListTodo size={12} className="text-indigo-400" /> Steps ({todo.subTasks.filter(s => s.completed).length}/{todo.subTasks.length})
+                              </span>
+                              <span className="text-indigo-400 font-mono">
+                                {Math.round((todo.subTasks.filter(s => s.completed).length / todo.subTasks.length) * 100)}%
+                              </span>
+                            </div>
+
+                            <div className="w-full h-1.5 bg-[#222] rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
+                                style={{ width: `${(todo.subTasks.filter(s => s.completed).length / todo.subTasks.length) * 100}%` }}
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              {todo.subTasks.map(subTask => (
+                                <div key={subTask.id} className="flex items-center justify-between gap-2 py-1 px-2 bg-[#181818] border border-[#242424] hover:border-[#333] rounded-lg transition-all group/sub">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleSubTask(todo, subTask.id)}
+                                      className={`h-4 w-4 rounded flex items-center justify-center border transition-all shrink-0 cursor-pointer ${
+                                        subTask.completed
+                                          ? 'bg-indigo-600 border-indigo-500 text-white'
+                                          : 'border-[#383838] hover:border-indigo-400 text-transparent'
+                                      }`}
+                                    >
+                                      <Check size={10} className="stroke-[3]" />
+                                    </button>
+                                    <span className={`text-xs font-medium break-words ${subTask.completed ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
+                                      {subTask.title}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0 text-[9px] font-extrabold uppercase">
+                                    {subTask.pointsValue !== undefined && (
+                                      <span className="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                        +{subTask.pointsValue} pts
+                                      </span>
+                                    )}
+                                    {subTask.dueDate && (
+                                      <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                                        subTask.reminderEnabled ? 'text-indigo-300 bg-indigo-500/10 border-indigo-500/30' : 'text-gray-400 bg-[#222] border-[#333]'
+                                      }`}>
+                                        {subTask.reminderEnabled && <Bell size={9} className="text-indigo-400 animate-pulse" />}
+                                        {subTask.dueDate} {subTask.dueTime || ''}
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteSubTask(todo, subTask.id)}
+                                      className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-opacity cursor-pointer"
+                                      title="Delete Step"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Inline Quick Add Step Button / Form */}
+                        <div className="mt-2 pt-2 border-t border-[#1f1f1f]">
+                          {!quickStepInputs[todo.id]?.showDetails ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="+ Quick add step..."
+                                value={quickStepInputs[todo.id]?.title || ''}
+                                onChange={(e) => setQuickStepInputs(prev => ({
+                                  ...prev,
+                                  [todo.id]: {
+                                    title: e.target.value,
+                                    points: prev[todo.id]?.points ?? 5,
+                                    dueDate: prev[todo.id]?.dueDate || '',
+                                    dueTime: prev[todo.id]?.dueTime || '09:00',
+                                    reminderEnabled: prev[todo.id]?.reminderEnabled ?? false,
+                                    showDetails: prev[todo.id]?.showDetails ?? false
+                                  }
+                                }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleQuickAddStep(todo);
+                                }}
+                                className="bg-[#101010] border border-[#222] focus:border-indigo-500 rounded px-2.5 py-1 text-xs text-white flex-1 outline-none transition-colors"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setQuickStepInputs(prev => ({
+                                  ...prev,
+                                  [todo.id]: {
+                                    title: prev[todo.id]?.title || '',
+                                    points: prev[todo.id]?.points ?? 5,
+                                    dueDate: prev[todo.id]?.dueDate || '',
+                                    dueTime: prev[todo.id]?.dueTime || '09:00',
+                                    reminderEnabled: prev[todo.id]?.reminderEnabled ?? false,
+                                    showDetails: !prev[todo.id]?.showDetails
+                                  }
+                                }))}
+                                className="p-1.5 text-gray-500 hover:text-indigo-400 bg-[#161616] border border-[#252525] rounded transition-colors cursor-pointer"
+                                title="Set step due date or points"
+                              >
+                                <Sliders size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleQuickAddStep(todo)}
+                                className="px-2.5 py-1 text-[10px] font-black uppercase text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded transition-colors cursor-pointer shrink-0"
+                              >
+                                Add Step
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="p-2 bg-[#121212] border border-[#2a2a2a] rounded-lg space-y-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Step title..."
+                                  value={quickStepInputs[todo.id]?.title || ''}
+                                  onChange={(e) => setQuickStepInputs(prev => ({
+                                    ...prev,
+                                    [todo.id]: { ...prev[todo.id], title: e.target.value }
+                                  }))}
+                                  className="bg-[#181818] border border-[#333] rounded px-2 py-1 text-xs text-white flex-1 outline-none"
+                                />
+                                <div className="flex items-center gap-1 bg-[#181818] border border-[#333] rounded px-2 py-1">
+                                  <Sparkles size={11} className="text-amber-400" />
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={quickStepInputs[todo.id]?.points ?? 5}
+                                    onChange={(e) => setQuickStepInputs(prev => ({
+                                      ...prev,
+                                      [todo.id]: { ...prev[todo.id], points: parseInt(e.target.value) || 0 }
+                                    }))}
+                                    className="w-10 bg-transparent text-xs text-white text-right outline-none font-bold"
+                                  />
+                                  <span className="text-[9px] font-bold text-gray-500">pts</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap text-[10px]">
+                                <div className="w-36">
+                                  <DatePicker
+                                    selectedDate={quickStepInputs[todo.id]?.dueDate || ''}
+                                    onChange={(d) => setQuickStepInputs(prev => ({
+                                      ...prev,
+                                      [todo.id]: {
+                                        ...prev[todo.id],
+                                        dueDate: d,
+                                        reminderEnabled: !!d && (prev[todo.id]?.reminderEnabled ?? true)
+                                      }
+                                    }))}
+                                    label=""
+                                  />
+                                </div>
+                                {quickStepInputs[todo.id]?.dueDate && (
+                                  <>
+                                    <div className="w-24">
+                                      <TimePicker
+                                        value={quickStepInputs[todo.id]?.dueTime || '09:00'}
+                                        onChange={(t) => setQuickStepInputs(prev => ({
+                                          ...prev,
+                                          [todo.id]: { ...prev[todo.id], dueTime: t }
+                                        }))}
+                                      />
+                                    </div>
+                                    <label className="flex items-center gap-1.5 px-2 py-1 bg-[#181818] border border-[#333] rounded text-[10px] font-bold text-gray-300 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={quickStepInputs[todo.id]?.reminderEnabled ?? false}
+                                        onChange={(e) => setQuickStepInputs(prev => ({
+                                          ...prev,
+                                          [todo.id]: { ...prev[todo.id], reminderEnabled: e.target.checked }
+                                        }))}
+                                        className="rounded text-indigo-500 bg-[#222]"
+                                      />
+                                      <Bell size={11} className={quickStepInputs[todo.id]?.reminderEnabled ? 'text-indigo-400' : 'text-gray-500'} /> Alarm
+                                    </label>
+                                  </>
+                                )}
+
+                                <div className="ml-auto flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setQuickStepInputs(prev => ({
+                                      ...prev,
+                                      [todo.id]: { ...prev[todo.id], showDetails: false }
+                                    }))}
+                                    className="text-gray-500 hover:text-gray-300 text-[10px] uppercase font-bold cursor-pointer"
+                                  >
+                                    Collapse
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAddStep(todo)}
+                                    className="px-2.5 py-1 text-[10px] font-black uppercase text-white bg-indigo-600 hover:bg-indigo-500 rounded transition-colors cursor-pointer"
+                                  >
+                                    Save Step
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>

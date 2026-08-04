@@ -2951,7 +2951,7 @@ function SortableMasterItem(props: any) {
   );
 }
 
-function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { task: MasterTask; allTasks: MasterTask[]; onDelete: (id: string) => void; onRename: (id: string, name: string) => void; onUpdate?: (id: string, updates: any) => void; }) {
+export function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate }: { task: MasterTask; allTasks: MasterTask[]; onDelete: (id: string) => void; onRename: (id: string, name: string) => void; onUpdate?: (id: string, updates: any) => void; }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const Icon = task.type === 'notes' ? StickyNote : task.type === 'counter' ? Activity : task.type === 'toggle_list' ? ChevronDown : task.type === 'task_counter' ? Hash : Check;

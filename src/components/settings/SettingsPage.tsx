@@ -12,6 +12,9 @@ import {
   Activity, StickyNote, ChevronDown, Hash, ListFilter
 } from 'lucide-react';
 import { LexoRank } from 'lexorank';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { SortableModalRow } from '@/components/habits/HabitTracker';
 
 const safeParse = (s?: string) => {
   try { return s ? LexoRank.parse(s) : LexoRank.middle(); } catch { return LexoRank.middle(); }
@@ -21,6 +24,11 @@ export function SettingsPage() {
   const { settings, updateSettings } = useWorkspace();
   const { user } = useAuth();
   const router = useRouter();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
 
   const [counterFormat, setCounterFormat] = useState<'fraction' | 'percent'>('fraction');
   const [textSize, setTextSize] = useState<'small' | 'medium' | 'large'>('small');
@@ -233,102 +241,70 @@ export function SettingsPage() {
           <div className="flex items-center justify-between border-b border-[#2d2d2d] pb-3">
             <div className="flex items-center gap-2.5 text-emerald-400">
               <ListFilter size={20} />
-              <h2 className="text-sm font-black uppercase tracking-wider text-white">Edit Master Properties</h2>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button onClick={() => addMasterTask('habit')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><Plus size={12}/> Habit</button>
-              <button onClick={() => addMasterTask('counter')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><Activity size={12}/> Counter</button>
-              <button onClick={() => addMasterTask('notes')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><StickyNote size={12}/> Notes</button>
-              <button onClick={() => addMasterTask('toggle_list')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><ChevronDown size={12}/> Toggle List</button>
-              <button onClick={() => addMasterTask('task_counter')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><Hash size={12}/> Task Counter</button>
+              <h2 className="text-sm font-black uppercase tracking-wider text-white">Master Task Definitions</h2>
             </div>
           </div>
 
           <p className="text-[11px] text-gray-400">
-            Manage your master habit and task property definitions. Changes made here apply across all daily record cards and tracking views.
+            Manage your master habit and task property definitions. Configure sub-tasks, reset intervals, point rewards, label colors, and drag to reorder.
           </p>
 
-          {masterTasks.length === 0 ? (
-            <div className="p-8 text-center border border-dashed border-[#333] rounded-xl text-gray-500 text-xs font-mono">
-              No master properties defined yet. Click any button above to create one.
+          <div className="space-y-4">
+            <div className="flex gap-2 pb-4 border-b border-[#2d2d2d]/50">
+              <button onClick={() => addMasterTask('habit')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#141414] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer">
+                <Plus size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Habit</span>
+              </button>
+              <button onClick={() => addMasterTask('counter')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#141414] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer">
+                <Activity size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Counter</span>
+              </button>
+              <button onClick={() => addMasterTask('notes')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#141414] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer">
+                <StickyNote size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Notes</span>
+              </button>
+              <button onClick={() => addMasterTask('toggle_list')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#141414] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer">
+                <ChevronDown size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Toggle List</span>
+              </button>
+              <button onClick={() => addMasterTask('task_counter')} className="flex-1 py-2.5 flex flex-col items-center gap-1.5 bg-[#141414] border border-[#2d2d2d] rounded-lg text-gray-400 hover:text-white hover:border-[#3d3d3d] transition-all cursor-pointer">
+                <Hash size={16}/> <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider">Task Counter</span>
+              </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {masterTasks.map((task) => (
-                <div key={task.id} className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-3 hover:border-[#444] transition-all">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="p-1.5 bg-[#222] border border-[#333] rounded-lg text-emerald-400">
-                        {task.type === 'habit' && <Check size={14} />}
-                        {task.type === 'counter' && <Activity size={14} />}
-                        {task.type === 'notes' && <StickyNote size={14} />}
-                        {task.type === 'toggle_list' && <ChevronDown size={14} />}
-                        {task.type === 'task_counter' && <Hash size={14} />}
-                      </span>
-                      <input 
-                        type="text" 
-                        value={task.name || ''} 
-                        onChange={(e) => updateMasterTask(task.id, { name: e.target.value })}
-                        className="bg-[#1e1e1e] border border-[#333] focus:border-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg outline-none flex-1 min-w-0"
-                        placeholder="Property Name"
-                      />
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={task.type}
-                        onChange={(e) => updateMasterTask(task.id, { type: e.target.value })}
-                        className="bg-[#1e1e1e] border border-[#333] text-gray-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg outline-none cursor-pointer"
-                      >
-                        <option value="habit">Habit</option>
-                        <option value="counter">Counter</option>
-                        <option value="notes">Notes</option>
-                        <option value="toggle_list">Toggle List</option>
-                        <option value="task_counter">Task Counter</option>
-                      </select>
-
-                      <button 
-                        onClick={() => deleteMasterTask(task.id)}
-                        className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
-                        title="Delete Property"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[#252525]">
-                    {task.type !== 'toggle_list' && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Reset Interval</span>
-                        <select
-                          value={task.period || 'daily'}
-                          onChange={(e) => updateMasterTask(task.id, { period: e.target.value })}
-                          className="bg-[#1e1e1e] border border-[#333] text-white text-[11px] font-mono px-2.5 py-1 rounded-lg outline-none cursor-pointer"
-                        >
-                          <option value="daily">Daily Habit (Resets daily)</option>
-                          <option value="weekly">Weekly Task (Resets weekly)</option>
-                        </select>
-                      </div>
-                    )}
-
-                    {task.type === 'habit' && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Base Points</span>
-                        <input 
-                          type="number"
-                          min={0}
-                          value={task.pointsValue ?? 10}
-                          onChange={(e) => updateMasterTask(task.id, { pointsValue: parseInt(e.target.value) || 0 })}
-                          className="w-20 bg-[#1e1e1e] border border-[#333] text-white text-[11px] font-mono text-right px-2.5 py-1 rounded-lg outline-none"
-                        />
-                      </div>
-                    )}
-                  </div>
+            <div className="space-y-2">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={async (event) => {
+                  const { active, over } = event;
+                  if (!over || active.id === over.id || !user || !habitPageId) return;
+                  const oldIndex = masterTasks.findIndex(t => t.id === active.id);
+                  const newIndex = masterTasks.findIndex(t => t.id === over.id);
+                  const newOrder = arrayMove(masterTasks, oldIndex, newIndex);
+                  let sortOrder;
+                  if (newIndex === 0) sortOrder = safeParse(newOrder[1]?.sortOrder).genPrev().toString();
+                  else if (newIndex === newOrder.length - 1) sortOrder = safeParse(newOrder[newIndex - 1]?.sortOrder).genNext().toString();
+                  else sortOrder = safeParse(newOrder[newIndex - 1]?.sortOrder).between(safeParse(newOrder[newIndex + 1]?.sortOrder)).toString();
+                  await updateDoc(doc(db, 'users', user.uid, 'pages', habitPageId, 'master_tasks', active.id.toString()), { sortOrder });
+                }}
+              >
+                <SortableContext items={masterTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                  {masterTasks.map(task => (
+                    <SortableModalRow 
+                      key={task.id} 
+                      task={task} 
+                      allTasks={masterTasks} 
+                      onDelete={deleteMasterTask} 
+                      onRename={(id, name) => updateMasterTask(id, { name })} 
+                      onUpdate={(id, updates) => updateMasterTask(id, updates)} 
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+              {masterTasks.length === 0 && (
+                <div className="p-8 text-center border border-dashed border-[#333] rounded-xl text-gray-500 text-xs font-mono">
+                  No master properties defined yet. Click any button above to create one.
                 </div>
-              ))}
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Section 2: Habit Tracker Preferences */}
