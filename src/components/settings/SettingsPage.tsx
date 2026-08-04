@@ -5,11 +5,17 @@ import { useWorkspace } from '@/context/WorkspaceContext';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useRouter } from '@/context/RouterContext';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs, query, onSnapshot, setDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { 
   Settings2, Clock, ArrowLeft, Check, 
-  Sparkles, Sliders
+  Sparkles, Sliders, Plus, Trash2,
+  Activity, StickyNote, ChevronDown, Hash, ListFilter
 } from 'lucide-react';
+import { LexoRank } from 'lexorank';
+
+const safeParse = (s?: string) => {
+  try { return s ? LexoRank.parse(s) : LexoRank.middle(); } catch { return LexoRank.middle(); }
+};
 
 export function SettingsPage() {
   const { settings, updateSettings } = useWorkspace();
@@ -22,6 +28,7 @@ export function SettingsPage() {
   const [daysSorting, setDaysSorting] = useState<'chrono' | 'reverse'>('chrono');
 
   const [habitPageId, setHabitPageId] = useState<string | null>(null);
+  const [masterTasks, setMasterTasks] = useState<any[]>([]);
   const [gamificationStats, setGamificationStats] = useState<{
     allHabitsBonus?: number;
     weeklyResetDay?: number;
@@ -32,7 +39,7 @@ export function SettingsPage() {
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Fetch habit stats from first habit page if available
+  // Fetch habit stats and master tasks from first habit page if available
   useEffect(() => {
     if (!user) return;
     const fetchHabitStats = async () => {
@@ -54,6 +61,52 @@ export function SettingsPage() {
     };
     fetchHabitStats();
   }, [user]);
+
+  // Subscribe to master tasks when habitPageId is loaded
+  useEffect(() => {
+    if (!user || !habitPageId) return;
+    const tasksRef = collection(db, 'users', user.uid, 'pages', habitPageId, 'master_tasks');
+    const q = query(tasksRef, orderBy('sortOrder', 'asc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setMasterTasks(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [user, habitPageId]);
+
+  const addMasterTask = async (type: 'habit' | 'counter' | 'notes' | 'toggle_list' | 'task_counter' = 'habit') => {
+    if (!user || !habitPageId) return;
+    const defaultNames: Record<string, string> = {
+      habit: 'New Habit',
+      counter: 'New Counter',
+      notes: 'New Note',
+      toggle_list: 'New List',
+      task_counter: 'New Task Counter'
+    };
+    const sortOrder = masterTasks.length > 0 
+      ? safeParse(masterTasks[masterTasks.length - 1].sortOrder).genNext().toString() 
+      : LexoRank.middle().toString();
+    const id = doc(collection(db, 'users', user.uid, 'pages', habitPageId, 'master_tasks')).id;
+    await setDoc(doc(db, 'users', user.uid, 'pages', habitPageId, 'master_tasks', id), {
+      id,
+      name: defaultNames[type] || 'New Property',
+      sortOrder,
+      type,
+      period: 'daily'
+    });
+    triggerSavedNotice();
+  };
+
+  const updateMasterTask = async (id: string, updates: any) => {
+    if (!user || !habitPageId) return;
+    await updateDoc(doc(db, 'users', user.uid, 'pages', habitPageId, 'master_tasks', id), updates);
+    triggerSavedNotice();
+  };
+
+  const deleteMasterTask = async (id: string) => {
+    if (!user || !habitPageId) return;
+    await deleteDoc(doc(db, 'users', user.uid, 'pages', habitPageId, 'master_tasks', id));
+    triggerSavedNotice();
+  };
 
   const handleUpdateGamificationStats = async (key: string, value: number) => {
     if (!user || !habitPageId) return;
@@ -173,6 +226,109 @@ export function SettingsPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Section 2: Edit Master Task & Habit Properties */}
+        <div className="bg-[#1e1e1e] border border-[#2d2d2d] rounded-2xl p-6 shadow-xl space-y-6">
+          <div className="flex items-center justify-between border-b border-[#2d2d2d] pb-3">
+            <div className="flex items-center gap-2.5 text-emerald-400">
+              <ListFilter size={20} />
+              <h2 className="text-sm font-black uppercase tracking-wider text-white">Edit Master Properties</h2>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button onClick={() => addMasterTask('habit')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><Plus size={12}/> Habit</button>
+              <button onClick={() => addMasterTask('counter')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><Activity size={12}/> Counter</button>
+              <button onClick={() => addMasterTask('notes')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><StickyNote size={12}/> Notes</button>
+              <button onClick={() => addMasterTask('toggle_list')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><ChevronDown size={12}/> Toggle List</button>
+              <button onClick={() => addMasterTask('task_counter')} className="px-2.5 py-1.5 bg-[#141414] border border-[#333] hover:border-emerald-500/50 rounded-lg text-emerald-400 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"><Hash size={12}/> Task Counter</button>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-gray-400">
+            Manage your master habit and task property definitions. Changes made here apply across all daily record cards and tracking views.
+          </p>
+
+          {masterTasks.length === 0 ? (
+            <div className="p-8 text-center border border-dashed border-[#333] rounded-xl text-gray-500 text-xs font-mono">
+              No master properties defined yet. Click any button above to create one.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {masterTasks.map((task) => (
+                <div key={task.id} className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-3 hover:border-[#444] transition-all">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="p-1.5 bg-[#222] border border-[#333] rounded-lg text-emerald-400">
+                        {task.type === 'habit' && <Check size={14} />}
+                        {task.type === 'counter' && <Activity size={14} />}
+                        {task.type === 'notes' && <StickyNote size={14} />}
+                        {task.type === 'toggle_list' && <ChevronDown size={14} />}
+                        {task.type === 'task_counter' && <Hash size={14} />}
+                      </span>
+                      <input 
+                        type="text" 
+                        value={task.name || ''} 
+                        onChange={(e) => updateMasterTask(task.id, { name: e.target.value })}
+                        className="bg-[#1e1e1e] border border-[#333] focus:border-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg outline-none flex-1 min-w-0"
+                        placeholder="Property Name"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={task.type}
+                        onChange={(e) => updateMasterTask(task.id, { type: e.target.value })}
+                        className="bg-[#1e1e1e] border border-[#333] text-gray-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg outline-none cursor-pointer"
+                      >
+                        <option value="habit">Habit</option>
+                        <option value="counter">Counter</option>
+                        <option value="notes">Notes</option>
+                        <option value="toggle_list">Toggle List</option>
+                        <option value="task_counter">Task Counter</option>
+                      </select>
+
+                      <button 
+                        onClick={() => deleteMasterTask(task.id)}
+                        className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                        title="Delete Property"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[#252525]">
+                    {task.type !== 'toggle_list' && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Reset Interval</span>
+                        <select
+                          value={task.period || 'daily'}
+                          onChange={(e) => updateMasterTask(task.id, { period: e.target.value })}
+                          className="bg-[#1e1e1e] border border-[#333] text-white text-[11px] font-mono px-2.5 py-1 rounded-lg outline-none cursor-pointer"
+                        >
+                          <option value="daily">Daily Habit (Resets daily)</option>
+                          <option value="weekly">Weekly Task (Resets weekly)</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {task.type === 'habit' && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Base Points</span>
+                        <input 
+                          type="number"
+                          min={0}
+                          value={task.pointsValue ?? 10}
+                          onChange={(e) => updateMasterTask(task.id, { pointsValue: parseInt(e.target.value) || 0 })}
+                          className="w-20 bg-[#1e1e1e] border border-[#333] text-white text-[11px] font-mono text-right px-2.5 py-1 rounded-lg outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Section 2: Habit Tracker Preferences */}

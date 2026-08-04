@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, orderBy, writeBatch, getDocs, getDoc, addDoc } from 'firebase/firestore';
-import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Package, Edit2, Receipt, FileText } from 'lucide-react';
+import { Plus, Minus, Trash2, Table as TableIcon, LayoutGrid, Check, Type, Hash, Calendar as CalendarIcon, Settings2, GripVertical, MoreVertical, Copy, Edit3, ChevronDown, ChevronRight, Edit, X, ChevronLeft, StickyNote, Activity, Type as TypeIcon, Settings, Image as ImageIcon, Gamepad2, ShoppingBag, Shield, Timer, Sparkles, Package, Edit2, Receipt, FileText, Pencil } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -191,6 +191,12 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
   
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<{ initialDate?: Date } | null>(null);
   const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenModal = () => setIsPropertyModalOpen(true);
+    window.addEventListener('open-property-modal', handleOpenModal);
+    return () => window.removeEventListener('open-property-modal', handleOpenModal);
+  }, []);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDefaultCoverModalOpen, setIsDefaultCoverModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, taskId: string } | null>(null);
@@ -666,7 +672,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     stats: any,
     todayStr: string
   ) => {
-    const activeHabits = masterTasks.filter(t => t.type === 'habit');
+    const activeHabits = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily'));
     if (activeHabits.length === 0) return { points: currentPoints, bonusAwarded: false };
     
     const allCompleted = activeHabits.every(t => !!recordData[t.id]);
@@ -865,7 +871,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         let streakExtended = false;
 
         const targetTasks = stats.streakTargetTasks ?? 1;
-        const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && !!nextRecordData[t.id]).length;
+        const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily') && !!nextRecordData[t.id]).length;
         const reachedStreakThreshold = countCompletedToday >= targetTasks;
 
         if (reachedStreakThreshold) {
@@ -1162,7 +1168,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     let streakExtended = false;
 
     const targetTasks = stats.streakTargetTasks ?? 1;
-    const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && !!nextRecordData[t.id]).length;
+    const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily') && !!nextRecordData[t.id]).length;
     const reachedStreakThreshold = countCompletedToday >= targetTasks;
 
     if (reachedStreakThreshold) {
@@ -1801,7 +1807,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             <div className="flex flex-col h-full max-w-2xl mx-auto py-2">
               {records.filter(r => r.id === sidePeekRecordId).map(record => {
                 const dateObj = parseISO(record.date);
-                const habits = masterTasks.filter(t => t.type === 'habit');
+                const habits = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily'));
                 const completedCount = habits.filter(h => !!record.data?.[h.id]).length;
                 const totalCount = habits.length;
                 const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -1813,6 +1819,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                       pageId={pageId} 
                       recordId={record.id} 
                       coverImage={record.coverImage} 
+                      onEditProperties={() => setIsPropertyModalOpen(true)}
                     />
                     <div className="flex flex-col gap-1 border-b border-[#1a1a1a] pb-6 mb-2 text-left relative">
                       <div className="flex justify-between items-start w-full">
@@ -1897,7 +1904,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                     <div className={`grid gap-4 w-full ${isPeek ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 2xl:grid-cols-8'}`}>
                       {group.items.map(record => {
                         const dateObj = parseISO(record.date);
-                        const habits = masterTasks.filter(t => t.type === 'habit');
+                        const habits = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily'));
                         const completedCount = habits.filter(h => !!record.data?.[h.id]).length;
                         const totalCount = habits.length;
                         const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -1907,7 +1914,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                             onClick={() => { if (!isPeek) { setSidePeekPageId(pageId); setSidePeekRecordId(record.id); } }}
                             className={`bg-[#1e1e1e] border border-[#2d2d2d] rounded-[8px] flex flex-col hover:border-[#3d3d3d] transition-all group/card relative overflow-hidden h-fit ${!isPeek ? 'min-h-0 md:min-h-[160px]' : 'min-h-[160px]'} shadow-sm ${!isPeek ? 'cursor-pointer' : ''}`}
                           >
-                            <div className={`h-24 w-full relative overflow-hidden shrink-0 border-b border-[#1a1a1a] bg-[#161616] ${(!isPeek && !record.coverImage) ? 'hidden md:block' : ''}`}>
+                            <div className={`h-24 w-full relative overflow-hidden shrink-0 border-b border-[#1a1a1a] bg-[#161616] group/card-cover ${(!isPeek && !record.coverImage) ? 'hidden md:block' : ''}`}>
                               {record.coverImage?.url && (
                                 <img 
                                   src={record.coverImage.url + (record.coverImage.type === 'preset' ? (record.coverImage.url.includes('?') ? '&w=600' : '?w=600') : '')} 
@@ -1919,6 +1926,16 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                                   alt="" 
                                 />
                               )}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsPropertyModalOpen(true);
+                                }}
+                                title="Edit Properties"
+                                className="absolute top-2 right-2 z-20 p-1.5 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/10 rounded-md text-gray-300 hover:text-white opacity-0 group-hover/card-cover:opacity-100 group-hover/card:opacity-100 transition-all cursor-pointer shadow-md hover:scale-105"
+                              >
+                                <Pencil size={12} />
+                              </button>
                             </div>
                             <div className="p-2 pb-1.5 border-b border-[#1a1a1a] bg-[#222]/30 flex justify-between items-start">
                               <div className="flex-1 min-w-0">
@@ -2011,7 +2028,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                 </thead>
                 <tbody>
                   {sortedRecords.map(record => {
-                    const habits = masterTasks.filter(t => t.type === 'habit');
+                    const habits = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily'));
                     const completedCount = habits.filter(h => !!record.data?.[h.id]).length;
                     const totalCount = habits.length;
                     const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -2519,9 +2536,9 @@ function SortableMasterItem(props: any) {
   useEffect(() => { if (isEditing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [isEditing]);
   
   if (task.type === 'toggle_list') {
-    const children = (allTasks || []).filter((t: any) => t.parentId === task.id && (t.type === 'habit' || t.type === 'notes'));
+    const children = (allTasks || []).filter((t: any) => t.parentId === task.id && (!t.period || t.period === 'daily') && (t.type === 'habit' || t.type === 'notes'));
     const recordId = id.split('::')[0];
-    const completionChildren = children.filter((child: any) => child.type === 'habit');
+    const completionChildren = children.filter((child: any) => child.type === 'habit' && (!child.period || child.period === 'daily'));
     const completedChildren = completionChildren.filter((child: any) => !!recordData?.[child.id]).length;
 
     // Scale the toggle header label proportionally with the user's text size setting

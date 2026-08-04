@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Image as ImageIcon, Upload, Link as LinkIcon, X, Loader2, Move } from 'lucide-react';
+import { Image as ImageIcon, Upload, Link as LinkIcon, X, Loader2, Move, Pencil } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage, db } from '@/lib/firebase';
 import { doc, updateDoc, collection, addDoc, onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
@@ -33,9 +33,10 @@ interface CoverImageProps {
     position?: number;
   };
   editable?: boolean;
+  onEditProperties?: () => void;
 }
 
-export function CoverImage({ pageId, recordId, isDefault, coverImage, editable = true }: CoverImageProps) {
+export function CoverImage({ pageId, recordId, isDefault, coverImage, editable = true, onEditProperties }: CoverImageProps) {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true); }, []);
 
@@ -234,6 +235,23 @@ export function CoverImage({ pageId, recordId, isDefault, coverImage, editable =
       onPointerMove={isRepositioning ? handlePointerMove : undefined}
       onPointerUp={isRepositioning ? handlePointerUp : undefined}
     >
+      {editable && !isRepositioning && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onEditProperties) {
+              onEditProperties();
+            } else {
+              window.dispatchEvent(new CustomEvent('open-property-modal'));
+            }
+          }}
+          title="Edit Properties"
+          className="absolute top-3 right-3 z-30 p-2 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-gray-300 hover:text-white opacity-0 group-hover/cover:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-105"
+        >
+          <Pencil size={14} />
+        </button>
+      )}
+
       {(coverImage?.url || optimisticCover) ? (
         <>
           <img 
