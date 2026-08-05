@@ -830,7 +830,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
              basePoints = 0;
            }
         }
-        const multiplier = stats.streakMultiplierActive !== false ? (newMultiplier || 1.0) : 1.0;
+        const multiplier = stats.streakMultiplierActive === true ? (newMultiplier || 1.0) : 1.0;
         const pointsChange = Math.round(basePoints * multiplier);
         
         let newPoints = stats.points;
@@ -959,7 +959,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       if (statsSnap.exists()) {
         const stats = statsSnap.data() as any;
         const basePoints = task.pointsValue ?? 10;
-        const multiplier = stats.streakMultiplierActive !== false ? (stats.streakMultiplier ?? 1.0) : 1.0;
+        const multiplier = stats.streakMultiplierActive === true ? (stats.streakMultiplier ?? 1.0) : 1.0;
         const pointsChange = Math.round(basePoints * multiplier);
 
         let newPoints = stats.points;
@@ -1024,7 +1024,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     
     const taskStreaks = stats.taskStreaks || {};
     const currentTaskStreak = taskStreaks[taskId] || { streak: 0, multiplier: 1.0, lastCompletedDate: '' };
-    const multiplier = stats.streakMultiplierActive !== false ? (currentTaskStreak.multiplier || 1.0) : 1.0;
+    const multiplier = stats.streakMultiplierActive === true ? (currentTaskStreak.multiplier || 1.0) : 1.0;
     
     let pointsGained = 0;
     let mainTaskBonusDelta = 0;
@@ -1781,7 +1781,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
 
                 <div className="space-y-3 border-t border-[#2d2d2d]/50 pt-3 md:col-span-2">
                   <span className="text-[9px] font-black uppercase text-gray-600 tracking-widest block">Gamification Rules</span>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <SettingsNumberInput label="Point Decay" description="Points lost per missed day." value={gamificationStats?.decayValue ?? 5} onCommit={async (value) => {
                       if (!user) return;
                       await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { decayValue: value });
@@ -1799,6 +1799,21 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
                         await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakTargetTasks: value });
                       }} 
                     />
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Streak Multiplier</span>
+                      <select
+                        className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
+                        value={gamificationStats?.streakMultiplierActive ? 'enabled' : 'disabled'}
+                        onChange={async (e) => {
+                          if (!user) return;
+                          await updateDoc(doc(db, 'users', user.uid, 'pages', pageId, 'gamification', 'stats'), { streakMultiplierActive: e.target.value === 'enabled' });
+                        }}
+                      >
+                        <option value="disabled">Disabled (Fixed Base Points)</option>
+                        <option value="enabled">Enabled (Scales with Streak)</option>
+                      </select>
+                      <span className="text-[9px] text-gray-600 leading-normal block">Multiply base points by consecutive streak.</span>
+                    </div>
                   </div>
                 </div>
               </div>

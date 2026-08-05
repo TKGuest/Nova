@@ -471,7 +471,7 @@ export function TodoDashboard({
     const statsSnap = await getDoc(statsRef);
     if (statsSnap.exists()) {
       const stats = statsSnap.data() as any;
-      const multiplier = stats.streakMultiplierActive !== false ? (stats.streakMultiplier ?? 1.0) : 1.0;
+      const multiplier = stats.streakMultiplierActive === true ? (stats.streakMultiplier ?? 1.0) : 1.0;
       const pointsChange = Math.round(basePoints * multiplier);
 
       let newPoints = stats.points || 0;
@@ -724,7 +724,7 @@ export function TodoDashboard({
       if (statsSnap.exists()) {
         const stats = statsSnap.data() as any;
         const basePoints = todo.pointsValue ?? 15;
-        const multiplier = stats.streakMultiplierActive !== false ? (stats.streakMultiplier ?? 1.0) : 1.0;
+        const multiplier = stats.streakMultiplierActive === true ? (stats.streakMultiplier ?? 1.0) : 1.0;
         const pointsChange = Math.round(basePoints * multiplier);
 
         let newPoints = stats.points || 0;
