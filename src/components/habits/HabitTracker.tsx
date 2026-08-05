@@ -673,7 +673,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     todayStr: string
   ) => {
     const activeHabits = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily'));
-    if (activeHabits.length === 0) return { points: currentPoints, bonusAwarded: false };
+    if (activeHabits.length === 0) return { points: currentPoints, bonusAwarded: false, announcement: '' };
     
     const allCompleted = activeHabits.every(t => !!recordData[t.id]);
     const bonusPointsAmount = stats.allHabitsBonus ?? 50;
@@ -683,16 +683,23 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     
     let finalPoints = currentPoints;
     let nextBonusAwarded = wasBonusAwarded;
+    let announcement = '';
     
     if (allCompleted && !wasBonusAwarded) {
       finalPoints += bonusPointsAmount;
       nextBonusAwarded = true;
+      if (bonusPointsAmount > 0) {
+        announcement = `🌟 All Daily Habits Completed Bonus! +${bonusPointsAmount} pts`;
+      }
     } else if (!allCompleted && wasBonusAwarded) {
       finalPoints -= bonusPointsAmount;
       nextBonusAwarded = false;
+      if (bonusPointsAmount > 0) {
+        announcement = `All Daily Habits Bonus canceled (-${bonusPointsAmount} pts)`;
+      }
     }
     
-    return { points: finalPoints, bonusAwarded: nextBonusAwarded };
+    return { points: finalPoints, bonusAwarded: nextBonusAwarded, announcement };
   };
 
   const checkSevenDayPerfectWeekBonus = async (
@@ -855,7 +862,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         }
         
         // Check Completed All Habits Daily Bonus
-        const { points: finalPoints, bonusAwarded } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
+        const { points: finalPoints, bonusAwarded, announcement: allHabitsBonusAnnouncement } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
         
         // Check 7-Day Perfect Attendance Bonus
         const { points: pointsAfterWeekly, announcement: weeklyBonusAnnouncement } = await checkSevenDayPerfectWeekBonus(taskId, record.date, nextRecordData, finalPoints, stats);
@@ -910,6 +917,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         if (streakExtended) {
           playAscendingFanfare();
           showToast(`🔥 Streak Extended! ${currentST} Days!`, "success");
+        }
+
+        if (allHabitsBonusAnnouncement) {
+          showToast(allHabitsBonusAnnouncement, "success");
         }
 
         if (weeklyBonusAnnouncement) {
@@ -1157,7 +1168,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     pointsEarnedToday = Math.max(0, pointsEarnedToday + actualGain);
     
     // Check Completed All Habits Daily Bonus
-    const { points: finalPoints, bonusAwarded } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
+    const { points: finalPoints, bonusAwarded, announcement: allHabitsBonusAnnouncement } = evaluateAllHabitsBonus(recordId, nextRecordData, newPoints, stats, todayStr);
     
     // Check 7-Day Perfect Attendance Bonus
     const { points: pointsAfterWeekly, announcement: weeklyBonusAnnouncement } = await checkSevenDayPerfectWeekBonus(taskId, record.date, nextRecordData, finalPoints, stats);
@@ -1210,6 +1221,10 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     if (streakExtended) {
       playAscendingFanfare();
       showToast(`🔥 Streak Extended! ${currentST} Days!`, "success");
+    }
+
+    if (allHabitsBonusAnnouncement) {
+      showToast(allHabitsBonusAnnouncement, "success");
     }
 
     if (weeklyBonusAnnouncement) {
@@ -3063,21 +3078,6 @@ export function SortableModalRow({ task, allTasks, onDelete, onRename, onUpdate 
                 {toggleLists.map(tl => (
                   <option key={tl.id} value={tl.id}>{tl.name}</option>
                 ))}
-              </select>
-            </div>
-          )}
-
-          {/* Task Period Settings */}
-          {task.type !== 'toggle_list' && (
-            <div className="flex flex-col gap-1 pb-3 border-b border-[#2d2d2d]/50">
-              <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Task Frequency (Reset Interval)</span>
-              <select
-                className="bg-[#111] border border-[#2d2d2d] rounded px-3 py-2 text-[12.5px] font-medium text-white w-full outline-none focus:border-purple-500 transition-colors"
-                value={task.period || 'daily'}
-                onChange={(e) => onUpdate(task.id, { period: e.target.value })}
-              >
-                <option value="daily">Daily Habit (Resets every day)</option>
-                <option value="weekly">Weekly Task (Resets every week)</option>
               </select>
             </div>
           )}

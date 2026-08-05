@@ -20,6 +20,7 @@ import {
   Trash2, 
   Edit2, 
   Check, 
+  CheckCircle2,
   X, 
   Calendar, 
   Clock, 
@@ -913,13 +914,20 @@ export function TodoDashboard({
     }
   };
 
-  // Filter list
+  // Filter and sort list
   const filteredTodos = todos.filter(t => {
     if (filterTab === 'completed') return t.completed;
     if (t.completed) return false;
     if (filterTab === 'once') return (t.taskType || 'once') === 'once';
     if (filterTab === 'repetitive') return t.taskType === 'repetitive';
     return true; // 'all' active
+  }).sort((a, b) => {
+    if (filterTab === 'completed') {
+      const timeA = a.completedAt || a.lastCompletedAt || a.createdAt || 0;
+      const timeB = b.completedAt || b.lastCompletedAt || b.createdAt || 0;
+      return timeB - timeA; // Most recent completion shown first
+    }
+    return 0;
   });
 
   return (
@@ -1650,7 +1658,14 @@ export function TodoDashboard({
                             </span>
                           )}
 
-                          {todo.reminderEnabled && todo.dueDate && (
+                          {todo.completed && (
+                            <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-md border border-emerald-500/20 font-bold">
+                              <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+                              Completed: <strong className="text-emerald-300 font-extrabold">{todo.completedAt ? format(new Date(todo.completedAt), 'MMM d, yyyy h:mm a') : 'Done'}</strong>
+                            </span>
+                          )}
+
+                          {todo.reminderEnabled && todo.dueDate && !todo.completed && (
                             <span className="flex items-center gap-1 text-emerald-400">
                               <Bell size={11} className="animate-wiggle" />
                               Alarm On
@@ -1705,6 +1720,12 @@ export function TodoDashboard({
                                   </div>
 
                                   <div className="flex items-center gap-2 shrink-0 text-[9px] font-extrabold uppercase">
+                                    {subTask.completed && subTask.completedAt && (
+                                      <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-medium">
+                                        <CheckCircle2 size={9} />
+                                        {format(new Date(subTask.completedAt), 'MMM d, h:mm a')}
+                                      </span>
+                                    )}
                                     {subTask.pointsValue !== undefined && (
                                       <span className="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                         +{subTask.pointsValue} pts
