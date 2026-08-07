@@ -811,8 +811,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           } else if (newLastCompletedDate === todayStr) {
             // Already completed today, do not increment again
           } else {
-            newStreak = 1;
-            newMultiplier = 1.01;
+            newStreak = Math.max(1, newStreak);
+            newMultiplier = Math.max(1.01, newMultiplier);
           }
           newLastCompletedDate = todayStr;
         } else {
@@ -875,28 +875,34 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
         let currentST = stats.currentStreak ?? 0;
         let longestST = stats.longestStreak ?? 0;
         let lastActive = stats.lastActiveDate || "";
+        let lastActiveBeforeToday = stats.lastActiveDateBeforeToday || "";
         let streakExtended = false;
 
-        const targetTasks = stats.streakTargetTasks ?? 1;
-        const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily') && !!nextRecordData[t.id]).length;
-        const reachedStreakThreshold = countCompletedToday >= targetTasks;
+        // ONLY adjust today's global streak if we are modifying TODAY'S record
+        if (record.date === todayStr) {
+          const targetTasks = stats.streakTargetTasks ?? 1;
+          const activeDailyTasks = masterTasks.filter(t => t.type !== 'notes' && (!t.period || t.period === 'daily'));
+          const countCompletedToday = activeDailyTasks.filter(t => !!nextRecordData[t.id]).length;
+          const reachedStreakThreshold = countCompletedToday >= targetTasks;
 
-        if (reachedStreakThreshold) {
-          if (lastActive !== todayStr) {
-            currentST += 1;
-            if (currentST > longestST) {
-              longestST = currentST;
+          if (reachedStreakThreshold) {
+            if (lastActive !== todayStr) {
+              lastActiveBeforeToday = lastActive || yesterdayStr;
+              lastActive = todayStr;
+              currentST += 1;
+              if (currentST > longestST) {
+                longestST = currentST;
+              }
+              streakExtended = true;
             }
-            lastActive = todayStr;
-            streakExtended = true;
-          }
-          if (isCompleted) {
-            playDing();
-          }
-        } else {
-          if (lastActive === todayStr) {
-            currentST = Math.max(0, currentST - 1);
-            lastActive = stats.lastActiveDateBeforeToday || "";
+            if (isCompleted) {
+              playDing();
+            }
+          } else {
+            if (lastActive === todayStr) {
+              currentST = Math.max(0, currentST - 1);
+              lastActive = lastActiveBeforeToday || yesterdayStr;
+            }
           }
         }
 
@@ -909,7 +915,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
           currentStreak: currentST,
           longestStreak: longestST,
           lastActiveDate: lastActive,
-          lastActiveDateBeforeToday: reachedStreakThreshold && lastActive === todayStr ? (stats.lastActiveDateBeforeToday || stats.lastActiveDate || "") : (stats.lastActiveDateBeforeToday || "")
+          lastActiveDateBeforeToday: lastActiveBeforeToday
         };
 
         await updateDoc(statsRef, statsUpdates);
@@ -1093,8 +1099,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             } else if (newLastCompletedDate === todayStr) {
               // Already completed today
             } else {
-              newStreak = 1;
-              newMultiplier = 1.01;
+              newStreak = Math.max(1, newStreak);
+              newMultiplier = Math.max(1.01, newMultiplier);
             }
             newLastCompletedDate = todayStr;
           } else {
@@ -1130,8 +1136,8 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
             } else if (newLastCompletedDate === todayStr) {
               // Already completed today
             } else {
-              newStreak = 1;
-              newMultiplier = 1.01;
+              newStreak = Math.max(1, newStreak);
+              newMultiplier = Math.max(1.01, newMultiplier);
             }
             newLastCompletedDate = todayStr;
           } else {
@@ -1176,25 +1182,33 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
     let currentST = stats.currentStreak ?? 0;
     let longestST = stats.longestStreak ?? 0;
     let lastActive = stats.lastActiveDate || "";
+    let lastActiveBeforeToday = stats.lastActiveDateBeforeToday || "";
     let streakExtended = false;
 
-    const targetTasks = stats.streakTargetTasks ?? 1;
-    const countCompletedToday = masterTasks.filter(t => t.type === 'habit' && (!t.period || t.period === 'daily') && !!nextRecordData[t.id]).length;
-    const reachedStreakThreshold = countCompletedToday >= targetTasks;
+    const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
 
-    if (reachedStreakThreshold) {
-      if (lastActive !== todayStr) {
-        currentST += 1;
-        if (currentST > longestST) {
-          longestST = currentST;
+    // ONLY adjust today's global streak if we are modifying TODAY'S record
+    if (record.date === todayStr) {
+      const targetTasks = stats.streakTargetTasks ?? 1;
+      const activeDailyTasks = masterTasks.filter(t => t.type !== 'notes' && (!t.period || t.period === 'daily'));
+      const countCompletedToday = activeDailyTasks.filter(t => !!nextRecordData[t.id]).length;
+      const reachedStreakThreshold = countCompletedToday >= targetTasks;
+
+      if (reachedStreakThreshold) {
+        if (lastActive !== todayStr) {
+          lastActiveBeforeToday = lastActive || yesterdayStr;
+          lastActive = todayStr;
+          currentST += 1;
+          if (currentST > longestST) {
+            longestST = currentST;
+          }
+          streakExtended = true;
         }
-        lastActive = todayStr;
-        streakExtended = true;
-      }
-    } else {
-      if (lastActive === todayStr) {
-        currentST = Math.max(0, currentST - 1);
-        lastActive = stats.lastActiveDateBeforeToday || "";
+      } else {
+        if (lastActive === todayStr) {
+          currentST = Math.max(0, currentST - 1);
+          lastActive = lastActiveBeforeToday || yesterdayStr;
+        }
       }
     }
 
@@ -1207,7 +1221,7 @@ export function HabitTracker({ pageId, isPeek = false }: { pageId: string, isPee
       currentStreak: currentST,
       longestStreak: longestST,
       lastActiveDate: lastActive,
-      lastActiveDateBeforeToday: reachedStreakThreshold && lastActive === todayStr ? (stats.lastActiveDateBeforeToday || stats.lastActiveDate || "") : (stats.lastActiveDateBeforeToday || "")
+      lastActiveDateBeforeToday: lastActiveBeforeToday
     };
 
     // Save all updates to Firestore
